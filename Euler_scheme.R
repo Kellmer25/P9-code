@@ -15,7 +15,8 @@ Tinterval <- seq(0,Tend, by = Tend/N)
 
 ### Functions -----------------------------------------------------------------
 OU_exact <- function(alpha = -1/40, sigma = 1, Tend = 6.5, N = 23400){
-  X0 <- rnorm(1,0,(-2*alpha)^(-1))
+  # X0 <- rnorm(1,0,(-2*alpha)^(-1))
+  X0 <- 22.1559
   OU <- rep(X0,N+1)
   xi <- rnorm(N,0,1)
   t_inc <- Tend/N
@@ -66,11 +67,13 @@ EM_scheme <- function(BM, Tend=6.5, N = 23400, a = 0.03, rho = -0.3){
 
 
 ### ---------------------------------------------------------------------------
-BM <- matrix(nrow=N+1, ncol = 2)
+BM <- matrix(nrow=N+1, ncol = 3)
 BM[,1] <- BM_exact(Tend, N)
 BM[,2] <- BM_exact(Tend, N)
+BM[,3] <- BM_exact(Tend, N)
 
-res <- EM_scheme(BM = BM)
+res1 <- EM_scheme(BM = BM[,-1])
+res2 <- EM_scheme(BM = BM[,-2])
 
-plot(Tinterval, res, type = "l")
-
+plot(Tinterval, res1, type = "l", ylim = c(min(c(res1,res2)),max(c(res1,res2))))
+lines(x=Tinterval, y=res2)
