@@ -8,7 +8,8 @@ suppressMessages({
 
 
 ### Functions -----------------------------------------------------------------
-Get_Eikon <- function(filename,Date = "2023-08-25"){
+Get_Eikon <- function(filename,Date = c("2023-08-25")){
+  Dates <- as.Date(Date)
   
   Data <- readxl::read_xlsx(
     paste0("Eikon\\",filename),
@@ -22,7 +23,7 @@ Get_Eikon <- function(filename,Date = "2023-08-25"){
     dplyr::mutate(
       Timestamp = as.POSIXct(Timestamp, format = "%d-%b-%Y %H:%M:%OS")
     ) %>% 
-    dplyr::filter(lubridate::date(Timestamp) %in% as.POSIXct(Date))
+    dplyr::filter(lubridate::date(Timestamp) %in% Dates)
   
   return(Data)
 }
