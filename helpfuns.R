@@ -19,11 +19,6 @@ Get_Eikon <- function(filename,Date = "2023-08-25"){
       "Price" = `Last Trade`,
       Volume
     ) %>% 
-    dplyr::select(
-      Timestamp,
-      "Price" = `Last Trade`,
-      Volume
-    ) %>% 
     dplyr::mutate(
       Timestamp = as.POSIXct(Timestamp, format = "%d-%b-%Y %H:%M:%OS")
     ) %>% 
