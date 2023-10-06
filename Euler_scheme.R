@@ -14,6 +14,8 @@ beta1 <- 1/8
 Tinterval <- seq(0,Tend, by = Tend/N)
 
 ### Functions -----------------------------------------------------------------
+
+# Ornstein-Uhlenbeck exact
 OU_exact <- function(alpha = -1/40, sigma = 1, Tend = 6.5, N = 23400){
   X0 <- rnorm(1,0,sqrt((-2*alpha)^(-1)))
   # X0 <- 22.1559
@@ -28,6 +30,7 @@ OU_exact <- function(alpha = -1/40, sigma = 1, Tend = 6.5, N = 23400){
   return(OU)
 }
 
+# Brownian motion exact
 BM_exact <- function(Tend, N, ncols){
   BM <- matrix(nrow=N+1, ncol = ncols)
   t_inc <- T/N
@@ -45,6 +48,7 @@ b_func <- function(rho, sigma, BM_inc){
   return(rho*sigma*BM_inc[1] + sqrt(1-rho^2)*sigma*BM_inc[2])
 }
 
+# Euler scheme
 EM_scheme <- function(BM, sigma, Tend=6.5, N = 23400, a = 0.03, rho = -0.3){
   X0 <- 100
   X <- rep(X0,N+1)
@@ -65,6 +69,7 @@ EM_scheme <- function(BM, sigma, Tend=6.5, N = 23400, a = 0.03, rho = -0.3){
   return(X)
 }
 
+# Microstructure noise
 msNoise <- function(gamma, sigma, X, N){
   omega2 <- gamma^2*sqrt(sum(sigma^4))
   
@@ -77,6 +82,32 @@ plot_proc <- function(x1,x2) {
   yMin <- min(c(x1, x2))
   plot(Tinterval, x1, type = "l", ylim = c(yMin,yMax))
   lines(x=Tinterval, y=x2)
+}
+
+# Observation times
+obs_times = function(N=23400, lambdas=c(3,6), df=FALSE) {
+  len = length(lambdas)
+  obs = list()
+  for (i in 1:len) {
+    inter = rexp(N, 1/lambdas[i])
+    times = cumsum(inter)
+    times = times[!times > 23400]
+    obs[[i]] = times
+  }
+  if (isTRUE(df)) {
+    max_col = max(sapply(obs, function(x) length(x)))
+    for (i in 1:len) {
+      nas = rep(NA, max_col - length(obs[[i]]))
+      obs[[i]] = c(obs[[i]], nas)
+    }
+    cols = c()
+    for (i in 1:len) {
+      cols[i] = glue("lambda{lambdas[i]}")
+    }
+    obs = as.data.frame(obs) %>% 
+      magrittr::set_colnames(cols)
+  }
+  return(obs)
 }
 
 ### ---------------------------------------------------------------------------
