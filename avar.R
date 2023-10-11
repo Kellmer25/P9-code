@@ -44,10 +44,9 @@ Y_bar <- function(Y) {
 chi_fun <- function(Y) {
   chi <- vector("list", nrow(Y))
   for (i in 1:nrow(Y)){
-    chi[i,] <- Y[i,]
+    chi[[i]] <- Y[i,]%*%t(Y[i,])
   }
-  Y[]
-  return()
+  return(chi)
 }
 
 
