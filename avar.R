@@ -9,7 +9,7 @@ suppressMessages({
 })
 
 ### functions -----------------------------------------------------------------
-g_fun <- function(x){
+g_fun <- function(x) {
   min(x,1-x)
 }
 
@@ -42,11 +42,37 @@ Y_bar <- function(Y) {
 }
 
 chi_fun <- function(Y) {
-  chi <- vector("list", nrow(Y))
+  chi <- matrix(nrow = nrow(Y), ncol = ncol(Y)^2)
   for (i in 1:nrow(Y)){
-    chi[[i]] <- Y[i,]%*%t(Y[i,])
+    chi[i,] <- c(Y[i,]%*%t(Y[i,]))
   }
+  
   return(chi)
+}
+
+V_statistic <- function(chi, Y) {
+  kn <- kn_fun(Y)  
+  
+  v1 <- matrix(rep(0, ncol(Y)^4), nrow = ncol(Y)^2, ncol=ncol(Y)^2)
+  for (i in 1:nrow(chi)){
+    v1 <- v1 + chi[i,]%*%t(chi[i,]) 
+  }
+  
+  v2 <- matrix(rep(0, ncol(Y)^4), nrow = ncol(Y)^2, ncol=ncol(Y)^2)
+  for (i in 1:(nrow(Y) - 2*kn + 2)){
+    v2 <- v2 + chi[i,]%*%t(chi[i+kn,]) + chi[i+kn,]%*%t(chi[i,]) 
+  }
+  
+  return(v1 - 0.5*v2)
+}
+
+psi1 <- function(kn, gi = T) {
+  
+  
+}
+
+A_matrix <- function() {
+  
 }
 
 
@@ -55,3 +81,4 @@ Y <- test$XwN[,c(1,2)]
 Ybar <- Y_bar(Y)
 
 chi <- chi_fun(Ybar)
+V <- V_statistic(chi, Y)
