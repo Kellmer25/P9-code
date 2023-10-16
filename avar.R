@@ -202,7 +202,6 @@ C_vector <- function(A_inv, kn, theta) {
 }
 
 avar_est <- function(Y) {
-  browser()
   g_param1 <- list('a' = 0.5, 'b' = 0.5)
   g_param2 <- list('a' = 0.6, 'b' = 0.4)
   g_param3 <- list('a' = 0.7, 'b' = 0.6)
@@ -240,5 +239,5 @@ avar_est <- function(Y) {
 }
 
 ### Testing -------------------------------------------------------------------
-Y <- test$XwN[,c(1,2)]
+Y <- matrix(test$XwN[,c(1,2,3)])
 avar <- avar_est(Y)
