@@ -205,30 +205,30 @@ obs_times = function(N=23400, lambdas=c(3,6), df=FALSE) {
 }
 
 ### Test ----------------------------------------------------------------------
-BM <- BM_exact(Tend, N, 6)
-
-#OU Volatility
-sigma1 <- exp(beta0 + beta1*OU_exact(BM[,-c(1,3)]))
-sigma2 <- exp(beta0 + beta1*OU_exact(BM[,-c(2,3)]))
-
-X1 <- EM_scheme(BM = BM[,-1], sigma1)
-X2 <- EM_scheme(BM = BM[,-2], sigma2)
-
-XwN1 <- msNoise(0.001, sigma1, X1)
-XwN2 <- msNoise(0.001, sigma2, X2)
-
-test <- simulate_prices(n_prices = 5, Tend = 24, N = 86400, gamma2 = 0.01)
-test$cov
-
-test_dt <- matrix_to_dt(exp(test$XwN), return_list = T)
-mrc_est <- highfrequency::rMRCov(test_dt);mrc_est
-sum_stats(mrc_est, test$cov)
-
-test_dt_cov <- matrix_to_dt(exp(test$XwN), return_list = F)
-cov_est <- highfrequency::rCov(thinner_func(test_dt_cov,1),makeReturns = T)
-sum_stats(cov_est, test$cov)
-### Plot ----------------------------------------------------------------------
-par(mar = c(4,4,2,4), mfrow = c(2,1))
-plot_proc(X1,X2)
-plot_proc(XwN1, XwN2)
-max(c(XwN1-X1,XwN2-X2))
+# BM <- BM_exact(Tend, N, 6)
+# 
+# #OU Volatility
+# sigma1 <- exp(beta0 + beta1*OU_exact(BM[,-c(1,3)]))
+# sigma2 <- exp(beta0 + beta1*OU_exact(BM[,-c(2,3)]))
+# 
+# X1 <- EM_scheme(BM = BM[,-1], sigma1)
+# X2 <- EM_scheme(BM = BM[,-2], sigma2)
+# 
+# XwN1 <- msNoise(0.01, sigma1, X1)
+# XwN2 <- msNoise(0.001, sigma2, X2)
+# 
+# test <- simulate_prices(n_prices = 5, Tend = 24, N = 86400, gamma2 = 0.01)
+# test$cov
+# 
+# test_dt <- matrix_to_dt(exp(test$XwN), return_list = T)
+# mrc_est <- highfrequency::rMRCov(test_dt);mrc_est
+# sum_stats(mrc_est, test$cov)
+# 
+# test_dt_cov <- matrix_to_dt(exp(test$XwN), return_list = F)
+# cov_est <- highfrequency::rCov(thinner_func(test_dt_cov,1),makeReturns = T)
+# sum_stats(cov_est, test$cov)
+# ### Plot ----------------------------------------------------------------------
+# par(mar = c(4,4,2,4), mfrow = c(2,1))
+# plot_proc(X1,X2)
+# plot_proc(XwN1, XwN2)
+# max(c(XwN1-X1,XwN2-X2))

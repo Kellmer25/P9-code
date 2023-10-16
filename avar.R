@@ -276,7 +276,9 @@ MRC_est <- function(Y){
 }
 
 ### Testing -------------------------------------------------------------------
-Y <- test$XwN[,c(1,2,3)]
+source("Euler_scheme.R")
+sim <- simulate_prices(n_prices = 5, Tend = 24, N = 86400, gamma2 = 0.01)
+Y <- sim$XwN[,c(1,2,3)]
 mrc <- MRC_est(Y);mrc
 avar <- avar_est(Y);avar
 
