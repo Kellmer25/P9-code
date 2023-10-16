@@ -202,9 +202,9 @@ C_vector <- function(A_inv, kn, theta) {
 }
 
 avar_est <- function(Y) {
-  g_param1 <- list('a' = 0.5, 'b' = 0.5)
-  g_param2 <- list('a' = 0.6, 'b' = 0.4)
-  g_param3 <- list('a' = 0.7, 'b' = 0.6)
+  g_param1 <- list('a' = 1.05, 'b' = 1.05)
+  g_param2 <- list('a' = 1.06, 'b' = 1.04)
+  g_param3 <- list('a' = 1.07, 'b' = 1.06)
   if (is.null(nrow(Y)) && length(Y)!=0) {
     Y <- matrix(Y, ncol = 1)
   }
