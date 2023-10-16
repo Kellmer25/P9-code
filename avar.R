@@ -202,9 +202,9 @@ C_vector <- function(A_inv, kn, theta) {
 }
 
 avar_est <- function(Y) {
-  g_param1 <- list('a' = 1.05, 'b' = 1.05)
-  g_param2 <- list('a' = 1.06, 'b' = 1.04)
-  g_param3 <- list('a' = 1.07, 'b' = 1.06)
+  g_param1 <- list('a' = 6, 'b' = 3)
+  g_param2 <- list('a' = 4, 'b' = 5)
+  g_param3 <- list('a' = 8, 'b' = 2)
   if (is.null(nrow(Y)) && length(Y)!=0) {
     Y <- matrix(Y, ncol = 1)
   }
@@ -241,6 +241,42 @@ avar_est <- function(Y) {
   return(avar)
 }
 
+MRC_est <- function(Y){
+  if (is.null(nrow(Y)) && length(Y)!=0) {
+    Y <- matrix(Y, ncol = 1)
+  }
+  
+  theta <- 0.8
+  kn <- kn_fun(Y,theta)
+  n <- nrow(Y) - 1
+  d <- ncol(Y)
+  
+  Ybar <- Y_bar(Y,kn)
+  v1 <- matrix(rep(0,d^2), ncol = d)
+  psi_1 <- psi1(kn)
+  psi_2 <- psi2(kn)
+  
+  for (i in 0:(n - kn + 1)) {
+    v1 <- v1 + Ybar[i+1,]%*%t(Ybar[i+1,])
+  }
+  
+  mrc <- n/(n-kn+2)*1/(psi_2*kn)*v1
+  
+  dY <- diff(Y)
+  
+  v2 <- matrix(rep(0, d^2), ncol = d)
+  for (i in 1:nrow(dY)) {
+    v2 <- v2 + dY[i,]%*%t(dY[i,])
+  }
+  
+  ms_var <- 1/(2*n)*v2
+  bias_correction <- psi_1/(theta^2*psi_2)*ms_var
+  
+  return(mrc - bias_correction)
+}
+
 ### Testing -------------------------------------------------------------------
 Y <- test$XwN[,c(1,2,3)]
-avar <- avar_est(Y)
+mrc <- MRC_est(Y);mrc
+avar <- avar_est(Y);avar
+
