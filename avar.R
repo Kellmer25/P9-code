@@ -21,49 +21,51 @@ gi_fun <- function(x,param) {
 }
 
 kn_fun <- function(Y, theta = 0.8) {
-  kn <- floor(theta*sqrt(nrow(Y)))
+  kn <- floor(theta*sqrt(nrow(Y)-1))
   return(kn)
 }
 
-# Y_diff <- function(Y,I){
-#   return(Y[I+1] - Y[I])
-# }
-
-Y_bar <- function(Y) {
-  kn <- kn_fun(Y)
-  # browser()
-  Y_Res <- matrix(nrow=nrow(Y)-kn+2, ncol = ncol(Y))
+Y_bar <- function(Y, kn, ...) {
+  param <- unlist(list(...), recursive = F)
   
-  for (i in 1:nrow(Y_Res)){
-    # browser()
-    y_1 <- colSums(Y[(i+kn/2):(i+kn-1),])
-    y_2 <- colSums(Y[(i):(i+kn/2-1),])
-    Y_Res[i,] <- 1/kn * (y_1 - y_2) 
+  fun_to_call <- 'g_fun'
+  if ('a' %in% names(param)) {
+    fun_to_call <- 'gi_fun'
+  }
+  
+  dY <- diff(Y)
+  g_vals <- sapply(X = 1:(kn-1)/kn, FUN = fun_to_call, param)
+  
+  n <- nrow(Y)-1
+  Y_Res <- matrix(nrow=n-kn+2, ncol = ncol(Y))
+  
+  for (i in 0:(n-kn+1)) {
+    res_to_append <- 0
+    for (j in 1:(kn-1)){
+      res_to_append <- res_to_append + g_vals[j]*dY[i+j,]
+    }
+    Y_Res[i+1, ] <- res_to_append
   }
   
   return(Y_Res)
 }
 
-chi_fun <- function(Y) {
-  chi <- matrix(nrow = nrow(Y), ncol = ncol(Y)^2)
-  for (i in 1:nrow(Y)){
-    chi[i,] <- c(Y[i,]%*%t(Y[i,]))
-  }
-  
+chi_fun <- function(Ybari) {
+  chi <- c(matrix(Ybari,ncol = 1) %*% matrix(Ybari,nrow = 1))
   return(chi)
 }
 
-V_statistic <- function(chi, Y) {
-  kn <- kn_fun(Y)  
+V_statistic <- function(Ybar, kn, d = ncol(Y), n = nrow(Y)-1) {
+  v1 <- matrix(rep(0, d^4), nrow = d^2, ncol=d^2)
+  v2 <- matrix(rep(0, d^4), nrow = d^2, ncol=d^2)
   
-  v1 <- matrix(rep(0, ncol(Y)^4), nrow = ncol(Y)^2, ncol=ncol(Y)^2)
-  for (i in 1:nrow(chi)){
-    v1 <- v1 + chi[i,]%*%t(chi[i,]) 
+  for (i in 0:(n - kn + 1)) {
+    v1 <- v1 + chi_fun(Ybar[i+1,])%*%t(chi_fun(Ybar[i+1,]))
   }
   
-  v2 <- matrix(rep(0, ncol(Y)^4), nrow = ncol(Y)^2, ncol=ncol(Y)^2)
-  for (i in 1:(nrow(Y) - 2*kn + 2)){
-    v2 <- v2 + chi[i,]%*%t(chi[i+kn,]) + chi[i+kn,]%*%t(chi[i,]) 
+  for (i in 0:(n - 2*kn + 1)){
+    v2 <- v2 + chi_fun(Ybar[i+1,])%*%t(chi_fun(Ybar[i+kn+1,])) + 
+      chi_fun(Ybar[i+kn+1,])%*%t(chi_fun(Ybar[i+1,])) 
   }
   
   return(v1 - 0.5*v2)
@@ -94,12 +96,60 @@ psi2 <- function(kn, ...) {
   return((1/kn)*sum(v1^2))
 }
 
+phi1 <- function(j){
+  v1 <- sapply(X=j:(kn-2)/kn, FUN = g_fun)
+  v2 <- sapply(X=(j+1):(kn-1)/kn, FUN = g_fun)
+  v3 <- sapply(X=0:(kn-j-2)/kn, FUN = g_fun)
+  v4 <- sapply(X=1:(kn-j-1)/kn, FUN = g_fun)
+  
+  return(
+    sum(
+      (v1-v2)*(v3-v4)
+    )
+  )
+}
+
+phi2 <- function(j){
+  v1 <- sapply(X=j:(kn-2)/kn, FUN = g_fun)
+  v2 <- sapply(X=(j+1):(kn-1)/kn, FUN = g_fun)
+  
+  return(sum(v1-v2))
+}
+
+Phi11 <- function(kn) {
+  v1 <- sapply(X=0:(kn-1), FUN = phi1)
+  v2 <- phi1(0)
+  
+  return(kn*(sum(v1^2) - 0.5*v2^2))
+}
+
+Phi12 <- function(kn) {
+  v1 <- sapply(X=0:(kn-1), FUN = phi1)*sapply(X=0:(kn-1), FUN = phi2)
+  v2 <- phi1(0)*phi2(0)
+  
+  return((1/kn)*(sum(v1) - 0.5*v2))
+}
+
+Phi22 <- function(kn) {
+  v1 <- sapply(X=0:(kn-1), FUN = phi2)
+  v2 <- phi2(0)
+  
+  return((1/kn^3)*(sum(v1^2) - 0.5*v2^2))
+}
+
 invert_matrix3x3 <- function(a) {
   if (is.matrix(a) != T) stop("The input is not a matrix")
   if (ncol(a) != nrow(a)) stop("The matrix is not a square matrix")
   if (ncol(a)!=3 | nrow(a)!=3) stop("The matrix is not a 3x3 matrix")
   b <- matrix(rep(0,9), ncol=3)
-  det1a <- (a[1,3]*a[2,2]*a[3,1] - a[1,2]*a[2,3]*a[3,1] - a[1,3]*a[2,1]*a[3,2] + a[1,1]*a[2,3]*a[3,2] + a[1,2]*a[2,1]*a[3,3] - a[1,1]*a[2,2]*a[3,3])
+  det1a <- (
+    a[1,3]*a[2,2]*a[3,1] -
+      a[1,2]*a[2,3]*a[3,1] -
+      a[1,3]*a[2,1]*a[3,2] +
+      a[1,1]*a[2,3]*a[3,2] +
+      a[1,2]*a[2,1]*a[3,3] -
+      a[1,1]*a[2,2]*a[3,3]
+  )
   det2a <- -det1a
   if (det1a == 0) stop("The matrix is singular and not invertible")
   numb11 <- (a[2,3]*a[3,2] - a[2,2]*a[3,3])
@@ -123,11 +173,7 @@ invert_matrix3x3 <- function(a) {
   return(b)
 }
 
-A_matrix <- function(kn, theta) {
-  g_param1 <- list('a' = 0.1, 'b' = 0.5)
-  g_param2 <- list('a' = 0.2, 'b' = 0.4)
-  g_param3 <- list('a' = 0.7, 'b' = 0.6)
-  
+A_matrix <- function(kn, theta, g_param1, g_param2, g_param3) {
   a_B <- function(kn, param, theta){
     return(theta^2*psi2(kn, param)^2)
   }
@@ -147,11 +193,52 @@ A_matrix <- function(kn, theta) {
   return(A)
 }
 
+C_vector <- function(A_inv, kn, theta) {
+  v1 <- 2*Phi22(kn)*theta/psi2(kn)^2
+  v2 <- 2*Phi12(kn)/(psi2(kn)^2*theta)
+  v3 <- 2*Phi11(kn)/(psi2(kn)^2*theta^3)
+  
+  return(matrix(c(v1,v2,v3),nrow = 1)%*%A_inv)
+}
+
+avar_est <- function(Y) {
+  browser()
+  g_param1 <- list('a' = 0.5, 'b' = 0.5)
+  g_param2 <- list('a' = 0.6, 'b' = 0.4)
+  g_param3 <- list('a' = 0.7, 'b' = 0.6)
+  
+  theta <- 0.8
+  kn <- kn_fun(Y,theta)
+  
+  #V(g1)
+  Ybar_g1 <- Y_bar(Y, kn, g_param1)
+  V1 <- V_statistic(Ybar_g1, kn)
+  print("V1")
+  
+  #V(g2)
+  Ybar_g2 <- Y_bar(Y, kn, g_param2)
+  V2 <- V_statistic(Ybar_g2, kn)
+  
+  print("V2")
+  #V(g3)
+  Ybar_g3 <- Y_bar(Y, kn, g_param3)
+  V3 <- V_statistic(Ybar_g3, kn)
+  
+  print("V3")
+  #A matrix inverse
+  A_mat <- A_matrix(kn, theta, g_param1, g_param2, g_param3)
+  A_inv <- invert_matrix3x3(A_mat)
+  
+  print("A")
+  #C vector
+  C <- C_vector(A_inv, kn, theta)
+  print("C")
+  #avar
+  avar <- C[1]*V1 + C[2]*V2 + C[3]*V3
+  
+  return(avar)
+}
+
 ### Testing -------------------------------------------------------------------
 Y <- test$XwN[,c(1,2)]
-Ybar <- Y_bar(Y)
-
-chi <- chi_fun(Ybar)
-V <- V_statistic(chi, Y)
-list('x' = 0.5,'a' = 0.3, 'b' = 0.7) %>% 
-  do.call(gi_fun, .)
+avar <- avar_est(Y)
