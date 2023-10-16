@@ -174,8 +174,8 @@ sum_stats <- function(estimat, true_val) {
 plot_proc <- function(x1,x2) {
   yMax <- max(c(x1, x2))
   yMin <- min(c(x1, x2))
-  plot(Tinterval, x1, type = "l", ylim = c(yMin,yMax))
-  lines(x=Tinterval, y=x2)
+  plot(1:length(x1)/length(x1), x1, type = "l", ylim = c(yMin,yMax))
+  lines(x=1:length(x2)/length(x2), y=x2)
 }
 
 # Observation times

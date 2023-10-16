@@ -270,6 +270,7 @@ MRC_est <- function(Y){
   }
   
   ms_var <- 1/(2*n)*v2
+  print(ms_var)
   bias_correction <- psi_1/(theta^2*psi_2)*ms_var
   
   return(mrc - bias_correction)
@@ -277,9 +278,9 @@ MRC_est <- function(Y){
 
 ### Testing -------------------------------------------------------------------
 source("Euler_scheme.R")
-sim <- simulate_prices(n_prices = 5, Tend = 24, N = 86400, gamma2 = 0.01)
+sim <- simulate_prices(n_prices = 5, Tend = 24, N = 86400, gamma2 = 0.1)
 sim$cov #Analytical cov
-Y <- sim$XwN[,c(1,2,3)]
+Y <- sim$XwN
 mrc <- MRC_est(Y);mrc
 avar <- avar_est(Y);avar
 
