@@ -4,6 +4,8 @@ suppressMessages({
   library(magrittr)
   library(readxl)
   library(lubridate)
+  library(xts)
+  library(highfrequency)
 })
 
 
@@ -84,6 +86,64 @@ get_polygon_time_series = function(ticker, multiplier="1", interval="minute", to
   return(stock_df)
 }
 
-get_polygon_df = function() {
+get_forex_data = function(full=FALSE, refresh=FALSE, month="09") {
+  paths = list.files(path="Forex/", pattern=NULL, all.files=FALSE, full.names=TRUE)
+  month = paste0("2023", month)
+  files = c()
   
+  for (folder in paths) {
+    csv_paths = list.files(path=folder, pattern=".csv", all.files=FALSE, full.names=TRUE)
+    csv_paths = sort(csv_paths)
+    matches = grepl(month, csv_paths)
+    files = c(files, csv_paths[matches])
+  }
+  
+  data = list()
+  counter = 1
+  len = length(files)
+  
+  if (isTRUE(full)) {
+    for (file in files) {
+      name = strsplit(file, "/")[[1]][2]
+      cat("Fetching: ", name, " (", counter, "/", len, ")", sep="", end="\n")
+      df = read.csv2(file=files[1], header=FALSE) %>%
+        dplyr::mutate(V1 = strptime(V1, format="%Y%m%d %H%M%S")) %>%
+        dplyr::select(V1, V2)
+      df_xts = xts(df[,-1], order.by = df[,1])
+      data[[name]] = df_xts
+      counter = counter + 1
+    }
+  }
+  else {
+    for (file in files) {
+      placeholder = list()
+      name = strsplit(file, "/")[[1]][2]
+      cat("Fetching: ", name, " (", counter, "/", len, ")", sep="", end="\n")
+      df = read.csv2(file=files[1], header=FALSE) %>%
+        dplyr::mutate(V1 = strptime(V1, format="%Y%m%d %H%M%S")) %>%
+        dplyr::select(V1, V2)
+      days = unique(as.Date(df[,1]))
+      for (day in days) {
+        sub_df = df %>% 
+          dplyr::filter(as.Date(V1) == day)
+        sub_df_xts = xts(sub_df[,-1], order.by = sub_df[,1])
+        placeholder[[length(placeholder)+1]] = sub_df_xts
+      }
+      data[[name]] = placeholder
+      counter = counter + 1
+    }
+  }
+  if (isTRUE(refresh)) {
+  }
+  return(data)
 }
+
+save(test, file="forex_list2.RData")
+
+
+test = get_forex_data()
+
+test1 = refreshTime(test)
+
+
+
