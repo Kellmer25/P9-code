@@ -10,11 +10,11 @@ suppressMessages({
 })
 
 ### Magic numbers -------------------------------------------------------------
-Tend <- 6.5
-N <- Tend*3600
-beta0 <- -5/16
-beta1 <- 1/8
-Tinterval <- seq(0,Tend, by = Tend/N)
+# Tend <- 6.5
+# N <- Tend*3600
+# beta0 <- -5/16
+# beta1 <- 1/8
+# Tinterval <- seq(0,Tend, by = Tend/N)
 
 ### Functions -----------------------------------------------------------------
 OU_exact <- function(

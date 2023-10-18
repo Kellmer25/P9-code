@@ -194,9 +194,9 @@ A_matrix <- function(kn, theta, g_param1, g_param2, g_param3) {
 }
 
 C_vector <- function(A_inv, kn, theta) {
-  v1 <- 2*Phi22(kn)*theta/psi2(kn)^2
-  v2 <- 2*Phi12(kn)/(psi2(kn)^2*theta)
-  v3 <- 2*Phi11(kn)/(psi2(kn)^2*theta^3)
+  v1 <- 2*Phi22(kn=kn)*theta/psi2(kn=kn)^2
+  v2 <- 2*Phi12(kn=kn)/(psi2(kn=kn)^2*theta)
+  v3 <- 2*Phi11(kn=kn)/(psi2(kn=kn)^2*theta^3)
   
   return(matrix(c(v1,v2,v3),nrow = 1)%*%A_inv)
 }
@@ -210,8 +210,7 @@ avar_est <- function(Y) {
   }
   
   theta <- 0.8
-  kn <- kn_fun(Y,theta)
-  
+  kn <<- kn_fun(Y,theta)
   #V(g1)
   Ybar_g1 <- Y_bar(Y, kn, g_param1)
   V1 <- V_statistic(Ybar_g1, kn)
@@ -270,17 +269,40 @@ MRC_est <- function(Y){
   }
   
   ms_var <- 1/(2*n)*v2
-  print(ms_var)
   bias_correction <- psi_1/(theta^2*psi_2)*ms_var
   
   return(mrc - bias_correction)
 }
 
+confidence_intervals <- function(Y, mrc, avar) {
+  N <- nrow(Y)-1
+  d <- ncol(Y)
+  
+  results <- list()
+  
+  for (i in 1:d) {
+    for (j in 1:d) {
+      results[[paste(i,j,sep = ",")]] <- 
+        list(
+          "lower" = mrc[[i,j]] - 1.96*avar[[(i-1)*d+j,(i-1)*d+j]]/(N^(1/4)),
+          "upper" = mrc[[i,j]] + 1.96*avar[[(i-1)*d+j,(i-1)*d+j]]/(N^(1/4))
+        )
+    }
+  }
+  
+  return(results)
+}
+
 ### Testing -------------------------------------------------------------------
 source("Euler_scheme.R")
-sim <- simulate_prices(n_prices = 5, Tend = 24, N = 86400, gamma2 = 0.1)
+sim <- simulate_prices(n_prices = 2, Tend = 1, N = 86400, gamma2 = 0.01)
 sim$cov #Analytical cov
 Y <- sim$XwN
 mrc <- MRC_est(Y);mrc
 avar <- avar_est(Y);avar
+conf_int <- confidence_intervals(Y, mrc, avar);conf_int
+
+
+
+
 
