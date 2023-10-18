@@ -86,64 +86,127 @@ get_polygon_time_series = function(ticker, multiplier="1", interval="minute", to
   return(stock_df)
 }
 
-get_forex_data = function(full=FALSE, refresh=FALSE, month="09") {
+get_forex_data = function(from_month="01", to_month="09") {
   paths = list.files(path="Forex/", pattern=NULL, all.files=FALSE, full.names=TRUE)
-  month = paste0("2023", month)
-  files = c()
-  
-  for (folder in paths) {
-    csv_paths = list.files(path=folder, pattern=".csv", all.files=FALSE, full.names=TRUE)
-    csv_paths = sort(csv_paths)
-    matches = grepl(month, csv_paths)
-    files = c(files, csv_paths[matches])
-  }
+  months = paste0("20230", seq(from_month, "08"))
   
   data = list()
-  counter = 1
-  len = length(files)
   
-  if (isTRUE(full)) {
-    for (file in files) {
-      name = strsplit(file, "/")[[1]][2]
-      cat("Fetching: ", name, " (", counter, "/", len, ")", sep="", end="\n")
-      df = read.csv2(file=files[1], header=FALSE) %>%
-        dplyr::mutate(V1 = strptime(V1, format="%Y%m%d %H%M%S")) %>%
-        dplyr::select(V1, V2)
-      df_xts = xts(df[,-1], order.by = df[,1])
-      data[[name]] = df_xts
-      counter = counter + 1
+  counter = 1
+  len = length(paths)
+  
+  for (folder in paths) {
+    name = strsplit(folder, "/")[[1]][2]
+    cat("Fetching: ", name, " (", counter, "/", len, ")", sep="", end="\n")
+    
+    files = c()
+    csv_paths = list.files(path=folder, pattern=".csv", all.files=FALSE, full.names=TRUE)
+    csv_paths = sort(csv_paths)
+    matches = c()
+    for (i in 1:length(months)) {
+      matches[i] = grepl(months[i], csv_paths)[i]
     }
-  }
-  else {
+    if (length(months) < length(csv_paths)) {
+      matches[(length(months)+1):length(csv_paths)] = FALSE
+    }
+    files = csv_paths[matches]
+   
+    asset = list()
     for (file in files) {
-      placeholder = list()
-      name = strsplit(file, "/")[[1]][2]
-      cat("Fetching: ", name, " (", counter, "/", len, ")", sep="", end="\n")
-      df = read.csv2(file=files[1], header=FALSE) %>%
+      df = read.csv2(file=file, header=FALSE) %>%
         dplyr::mutate(V1 = strptime(V1, format="%Y%m%d %H%M%S")) %>%
+        dplyr::mutate(V2 = log(as.numeric(V2))) %>% 
         dplyr::select(V1, V2)
+      print(df[[1]][1])
       days = unique(as.Date(df[,1]))
       for (day in days) {
+        day = as.Date(day)
         sub_df = df %>% 
           dplyr::filter(as.Date(V1) == day)
         sub_df_xts = xts(sub_df[,-1], order.by = sub_df[,1])
-        placeholder[[length(placeholder)+1]] = sub_df_xts
+        
+        day_name = strsplit(as.character(day), "-")[[1]][2:3]
+        day_name = paste0(day_name[1], day_name[2])
+        asset[[day_name]] = sub_df_xts
       }
-      data[[name]] = placeholder
-      counter = counter + 1
     }
-  }
-  if (isTRUE(refresh)) {
+    data[[name]] = asset
+    counter = counter + 1
   }
   return(data)
 }
 
-save(test, file="forex_list2.RData")
 
+for (day in days) {
+  print(day)
+  day = as.Date(day)
+  print(day)
+  day = as.Date(day)
+  print(day)
+}
+
+get_avg_time = function(data) {
+  
+}
+
+refresh_list = function(data) {
+  assets = names(data)
+  days = names(data[["EURUSD"]])
+  
+  for (day in days) {
+    for (asset in assets) {
+      day_list = list()
+    }
+    
+    
+    
+  
+  }
+  
+  refreshTime()
+  
+  return(refresh_df)
+}
 
 test = get_forex_data()
 
-test1 = refreshTime(test)
+tester = refreshTime(data)
+
+saver = test
+
+save(data, "forex_list.Rdata")
 
 
+
+### Estimat ---------
+RC_est <- function(Y) {
+  if (is.null(nrow(Y)) && length(Y)!=0) {
+    Y <- matrix(Y, ncol = 1)
+  }
+  
+  n <- nrow(Y) - 1
+  d <- ncol(Y)
+  
+  res <- matrix(rep(0,d^2), ncol = d)
+  dY <- diff(Y)
+  for (i in 1:n) {
+    res <- res + dY[i,]%*%t(dY[i,])
+  }
+  return(res)
+}
+
+df1 = do.call(data.frame, test[[1]][1])
+df1[[1]] = log(as.numeric(df1[[1]]))
+colnames(df1) = "log-euraud"
+
+downsample = df1 %>% 
+  mutate(timestamp = as.POSIXct(row.names(.))) %>% 
+  group_by(grp = cut(timestamp, breaks = "5 min")) %>% 
+  summarise_all(first) %>% 
+  select(-grp)
+
+rc1 = RC_est(df1[[1]])
+rc2 = RC_est(downsample[[1]])
+
+avg_time = mean(diff(as.POSIXct(row.names(df1))))
 
