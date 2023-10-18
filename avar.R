@@ -284,17 +284,17 @@ confidence_intervals <- function(Y, mrc, avar) {
   d <- ncol(Y)
   
   results <- list()
-  for (i in 1:d) {
-    for (j in 1:i) {
-      results[[paste(i,j,sep = ",")]] <- 
-        list(
-          "lower" = mrc[[i,j]]-1.96*avar[[(i-1)*d+j,(i-1)*d+j]]/(n^(1/4)),
-          "upper" = mrc[[i,j]]+1.96*avar[[(i-1)*d+j,(i-1)*d+j]]/(n^(1/4))
-        )
-    }
-  }
+  upper_mat <- mrc + matrix(1.96*diag(avar)/(n^(1/4)), ncol = d)
+  lower_mat <- mrc - matrix(1.96*diag(avar)/(n^(1/4)), ncol = d)
   
-  return(results)
+  return(list("lower" = lower_mat, "upper" = upper_mat))
+}
+
+
+for (i in 1:2) {
+  for (j in 1:2) {
+    print((i-1)*d+j)
+  }
 }
 
 RC_est <- function(Y) {
@@ -372,20 +372,13 @@ confidence_plot <- function(rwest_result) {
   
   for (i in 1:length(mrcTS_11)) {
     mrcTS_11[i] <- rwest_result$mrc_estimates[[i]][[1,1]]
-    mrcTS_11_upper[i] <- rwest_result$mrc_conf[[i]]$`1,1`$upper
-    mrcTS_11_lower[i] <- rwest_result$mrc_conf[[i]]$`1,1`$lower
+    mrcTS_11_upper[i] <- rwest_result$mrc_conf[[i]]$upper[[1,1]]
+    mrcTS_11_lower[i] <- rwest_result$mrc_conf[[i]]$lower[[1,1]]
     true_cov[i] <- rwest_result$cov[[i]][[1,1]]
   }
   res <- data.frame(
     "day" = 1:30, true_cov, mrcTS_11, mrcTS_11_lower, mrcTS_11_upper
-  ) %>% 
-    dplyr::rowwise() %>% 
-    dplyr::mutate(
-      in_conf = dplyr::if_else(
-        true_cov>=mrcTS_11_lower && true_cov<=mrcTS_11_upper, 1, 0
-      )
-    ) %>% 
-    dplyr::ungroup()
+  )
   
   p <- ggplot(res, aes(day)) +
     geom_ribbon(
