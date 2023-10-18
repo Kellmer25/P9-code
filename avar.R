@@ -281,7 +281,7 @@ confidence_intervals <- function(Y, mrc, avar) {
   results <- list()
   
   for (i in 1:d) {
-    for (j in 1:d) {
+    for (j in 1:i) {
       results[[paste(i,j,sep = ",")]] <- 
         list(
           "lower" = mrc[[i,j]] - 1.96*avar[[(i-1)*d+j,(i-1)*d+j]]/(N^(1/4)),
@@ -293,6 +293,14 @@ confidence_intervals <- function(Y, mrc, avar) {
   return(results)
 }
 
+MAE <- function(true_cov, est) {
+  return(mean(abs(est - true_cov)))
+} 
+
+RMSE <- function(true_cov, est) {
+  return(sqrt(mean((est-true_cov)^2)))
+}
+
 ### Testing -------------------------------------------------------------------
 source("Euler_scheme.R")
 sim <- simulate_prices(n_prices = 2, Tend = 1, N = 86400, gamma2 = 0.01)
@@ -301,8 +309,8 @@ Y <- sim$XwN
 mrc <- MRC_est(Y);mrc
 avar <- avar_est(Y);avar
 conf_int <- confidence_intervals(Y, mrc, avar);conf_int
-
-
+MAE(sim$cov, mrc)
+RMSE(sim$cov, mrc)
 
 
 
