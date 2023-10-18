@@ -7,6 +7,7 @@ suppressMessages({
   library(tictoc)
   library(data.table)
   library(highfrequency)
+  library(ggplot2)
 })
 
 ### functions -----------------------------------------------------------------
@@ -271,8 +272,12 @@ MRC_est <- function(Y){
   
   ms_var <- 1/(2*n)*v2
   bias_correction <- psi_1/(theta^2*psi_2)*ms_var
+  scaling_const <- 1/(1-psi_1/(theta^2*psi_2*2*n))
   
-  return(mrc - bias_correction)
+  mrc_result <- scaling_const*(mrc - bias_correction)
+  
+  
+  return(mrc_result)
 }
 
 confidence_intervals <- function(Y, mrc, avar) {
@@ -318,17 +323,89 @@ RMSE <- function(true_cov, est) {
   return(sqrt(mean((est-true_cov)^2)))
 }
 
+rolling_window_estimation <- function(days, nprday, n_prices, gamma2) {
+  simulation <- simulate_prices(
+    n_prices = n_prices, 
+    Tend = days, 
+    N = days*nprday, 
+    gamma2 = gamma2
+  )
+  
+  Y <- simulation$XwN
+  
+  mrc_estimates <- list()
+  rc_estimates <- list()
+  avar_estimates <- list()
+  mrc_conf <- list()
+  
+  for (i in 1:days) {
+    from <- (i-1)*nprday+1
+    to <- i*nprday+1
+    Ydaily <- Y[from:to,]
+    
+    mrc_estimates[[paste0(i)]] <- MRC_est(Ydaily)
+    rc_estimates[[paste0(i)]] <- RC_est(Ydaily)
+    avar_estimates[[paste0(i)]] <- avar_est(Ydaily)
+    mrc_conf[[paste0(i)]] <- confidence_intervals(
+      Y = Ydaily,
+      mrc = mrc_estimates[[paste0(i)]],
+      avar = avar_estimates[[paste0(i)]]
+    )
+  }
+  
+  return(list(
+    "mrc_estimates" = mrc_estimates,
+    "rc_estimates" = rc_estimates,
+    "avar_estimates" = avar_estimates,
+    "mrc_conf" = mrc_conf
+  ))
+}
+
+confidence_plot <- function(rwest_result) {
+  d <- ncol(rwest_result$mrc_estimates$`1`)
+  
+  mrcTS_11 <- rep(0,length(rwest_result$mrc_estimates))
+  mrcTS_11_upper <- rep(0,length(rwest_result$mrc_estimates))
+  mrcTS_11_lower <- rep(0,length(rwest_result$mrc_estimates))
+  for (i in 1:length(mrcTS_11)) {
+    mrcTS_11[i] <- rwest_result$mrc_estimates[[i]][[1,1]]
+    mrcTS_11_upper[i] <- rwest_result$mrc_conf[[i]]$`1,1`$upper
+    mrcTS_11_lower[i] <- rwest_result$mrc_conf[[i]]$`1,1`$lower
+  }
+  
+  res <- data.frame("day" = 1:30, mrcTS_11, mrcTS_11_lower, mrcTS_11_upper)
+  
+  ggplot(res, aes(day)) +
+    geom_ribbon(
+      aes(ymin=mrcTS_11_lower,ymax=mrcTS_11_upper),
+      fill = "grey70"
+    ) +
+    geom_line(aes(y = mrcTS_11))
+  
+}
+
 ### Testing -------------------------------------------------------------------
 source("Euler_scheme.R")
-sim <- simulate_prices(n_prices = 2, Tend = 1, N = 86400, gamma2 = 0)
+sim <- simulate_prices(n_prices = 2, Tend = 1, N = 86400, gamma2 = 0.001)
 sim$cov #Analytical cov
 Y <- sim$XwN
 mrc <- MRC_est(Y);mrc
 rc <- RC_est(Y);rc
 avar <- avar_est(Y);avar
 conf_int <- confidence_intervals(Y, mrc, avar);conf_int
-MAE(sim$cov, mrc)
-RMSE(sim$cov, mrc)
+#MRC
+MAE(sim$cov, mrc);RMSE(sim$cov, mrc)
+#RC
+MAE(sim$cov, rc);RMSE(sim$cov, rc)
+
+pdata <- matrix_to_dt(exp(Y), return_list = T)
+hf_mrc <- highfrequency::rMRCov(pdata,crossAssetNoiseCorrection = T, makePsd = F, theta = 0.8);hf_mrc
+hf_mrc - mrc
+
+set.seed(123)
+rwest_result <- rolling_window_estimation(30, 86400, 2, 0.001)
+saveRDS(rwest_result, "rwest_result")
+
 
 
 
