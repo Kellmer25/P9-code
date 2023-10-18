@@ -275,7 +275,7 @@ MRC_est <- function(Y){
 }
 
 confidence_intervals <- function(Y, mrc, avar) {
-  N <- nrow(Y)-1
+  n <- nrow(Y)-1
   d <- ncol(Y)
   
   results <- list()
@@ -284,8 +284,8 @@ confidence_intervals <- function(Y, mrc, avar) {
     for (j in 1:i) {
       results[[paste(i,j,sep = ",")]] <- 
         list(
-          "lower" = mrc[[i,j]] - 1.96*avar[[(i-1)*d+j,(i-1)*d+j]]/(N^(1/4)),
-          "upper" = mrc[[i,j]] + 1.96*avar[[(i-1)*d+j,(i-1)*d+j]]/(N^(1/4))
+          "lower" = mrc[[i,j]] - 1.96*avar[[(i-1)*d+j,(i-1)*d+j]]/(n^(1/4)),
+          "upper" = mrc[[i,j]] + 1.96*avar[[(i-1)*d+j,(i-1)*d+j]]/(n^(1/4))
         )
     }
   }
