@@ -6,6 +6,7 @@ suppressMessages({
   library(tidyr)
   library(tictoc)
   library(data.table)
+  library(highfrequency)
 })
 
 ### functions -----------------------------------------------------------------
@@ -293,6 +294,22 @@ confidence_intervals <- function(Y, mrc, avar) {
   return(results)
 }
 
+RC_est <- function(Y) {
+  if (is.null(nrow(Y)) && length(Y)!=0) {
+    Y <- matrix(Y, ncol = 1)
+  }
+  
+  n <- nrow(Y) - 1
+  d <- ncol(Y)
+  
+  res <- matrix(rep(0,d^2), ncol = d)
+  dY <- diff(Y)
+  for (i in 1:n) {
+    res <- res + dY[i,]%*%t(dY[i,])
+  }
+  return(res)
+}
+
 MAE <- function(true_cov, est) {
   return(mean(abs(est - true_cov)))
 } 
@@ -303,10 +320,11 @@ RMSE <- function(true_cov, est) {
 
 ### Testing -------------------------------------------------------------------
 source("Euler_scheme.R")
-sim <- simulate_prices(n_prices = 2, Tend = 1, N = 86400, gamma2 = 0.01)
+sim <- simulate_prices(n_prices = 2, Tend = 1, N = 86400, gamma2 = 0)
 sim$cov #Analytical cov
 Y <- sim$XwN
 mrc <- MRC_est(Y);mrc
+rc <- RC_est(Y);rc
 avar <- avar_est(Y);avar
 conf_int <- confidence_intervals(Y, mrc, avar);conf_int
 MAE(sim$cov, mrc)
