@@ -57,10 +57,9 @@ chi_fun <- function(Ybari) {
   return(chi)
 }
 
-V_statistic <- function(Ybar, kn, d = ncol(Y), n = nrow(Y)-1) {
+V_statistic <- function(Ybar, kn, d = ncol(Y), n = nrow(Ybar)-1) {
   v1 <- matrix(rep(0, d^4), nrow = d^2, ncol=d^2)
   v2 <- matrix(rep(0, d^4), nrow = d^2, ncol=d^2)
-  
   for (i in 0:(n - kn + 1)) {
     v1 <- v1 + chi_fun(Ybar[i+1,])%*%t(chi_fun(Ybar[i+1,]))
   }
@@ -285,13 +284,12 @@ confidence_intervals <- function(Y, mrc, avar) {
   d <- ncol(Y)
   
   results <- list()
-  
   for (i in 1:d) {
     for (j in 1:i) {
       results[[paste(i,j,sep = ",")]] <- 
         list(
-          "lower" = mrc[[i,j]] - 1.96*avar[[(i-1)*d+j,(i-1)*d+j]]/(n^(1/4)),
-          "upper" = mrc[[i,j]] + 1.96*avar[[(i-1)*d+j,(i-1)*d+j]]/(n^(1/4))
+          "lower" = mrc[[i,j]]-1.96*avar[[(i-1)*d+j,(i-1)*d+j]]/(n^(1/4)),
+          "upper" = mrc[[i,j]]+1.96*avar[[(i-1)*d+j,(i-1)*d+j]]/(n^(1/4))
         )
     }
   }
@@ -337,6 +335,7 @@ rolling_window_estimation <- function(days, nprday, n_prices, gamma2) {
   rc_estimates <- list()
   avar_estimates <- list()
   mrc_conf <- list()
+  true_cov <- list()
   
   for (i in 1:days) {
     from <- (i-1)*nprday+1
@@ -351,13 +350,15 @@ rolling_window_estimation <- function(days, nprday, n_prices, gamma2) {
       mrc = mrc_estimates[[paste0(i)]],
       avar = avar_estimates[[paste0(i)]]
     )
+    true_cov[[paste0(i)]] <- simulation$cov[[paste0(i)]] 
   }
   
   return(list(
     "mrc_estimates" = mrc_estimates,
     "rc_estimates" = rc_estimates,
     "avar_estimates" = avar_estimates,
-    "mrc_conf" = mrc_conf
+    "mrc_conf" = mrc_conf,
+    "cov" = true_cov
   ))
 }
 
@@ -367,21 +368,34 @@ confidence_plot <- function(rwest_result) {
   mrcTS_11 <- rep(0,length(rwest_result$mrc_estimates))
   mrcTS_11_upper <- rep(0,length(rwest_result$mrc_estimates))
   mrcTS_11_lower <- rep(0,length(rwest_result$mrc_estimates))
+  true_cov <- rep(0,length(rwest_result$mrc_estimates))
+  
   for (i in 1:length(mrcTS_11)) {
     mrcTS_11[i] <- rwest_result$mrc_estimates[[i]][[1,1]]
     mrcTS_11_upper[i] <- rwest_result$mrc_conf[[i]]$`1,1`$upper
     mrcTS_11_lower[i] <- rwest_result$mrc_conf[[i]]$`1,1`$lower
+    true_cov[i] <- rwest_result$cov[[i]][[1,1]]
   }
+  res <- data.frame(
+    "day" = 1:30, true_cov, mrcTS_11, mrcTS_11_lower, mrcTS_11_upper
+  ) %>% 
+    dplyr::rowwise() %>% 
+    dplyr::mutate(
+      in_conf = dplyr::if_else(
+        true_cov>=mrcTS_11_lower && true_cov<=mrcTS_11_upper, 1, 0
+      )
+    ) %>% 
+    dplyr::ungroup()
   
-  res <- data.frame("day" = 1:30, mrcTS_11, mrcTS_11_lower, mrcTS_11_upper)
-  
-  ggplot(res, aes(day)) +
+  p <- ggplot(res, aes(day)) +
     geom_ribbon(
       aes(ymin=mrcTS_11_lower,ymax=mrcTS_11_upper),
       fill = "grey70"
     ) +
-    geom_line(aes(y = mrcTS_11))
+    geom_line(aes(y = mrcTS_11)) +
+    geom_line(aes(y = true_cov))
   
+  return(p)
 }
 
 ### Testing -------------------------------------------------------------------
@@ -403,7 +417,7 @@ hf_mrc <- highfrequency::rMRCov(pdata,crossAssetNoiseCorrection = T, makePsd = F
 hf_mrc - mrc
 
 set.seed(123)
-rwest_result <- rolling_window_estimation(30, 86400, 2, 0.001)
+rwest_result <- rolling_window_estimation(30, 10000, 2, 0.001)
 saveRDS(rwest_result, "rwest_result")
 
 

@@ -148,10 +148,16 @@ simulate_prices <- function(n_prices, Tend, N, gamma2, return_cov = T) {
   }
   
   if (return_cov) {
-    cov <- approx_analytic_cov(
-      sigma, rho = rep(x = 0.3,n_prices), Tend = Tend, N = N
-    )
-    return(list("XwN" = XwN, "cov" = cov))
+    cov_list <- list()
+    for (i in 1:Tend) {
+      cov_list[[paste0(i)]] <- approx_analytic_cov(
+        sigma[((i-1)*N/Tend+1):(i*N/Tend+1),], 
+        rho = rep(x = 0.3,n_prices), 
+        Tend = 1, 
+        N = N/Tend
+      )
+    }
+    return(list("XwN" = XwN, "cov" = cov_list))
   }
   
   return(XwN)
