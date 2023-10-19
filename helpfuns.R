@@ -102,7 +102,7 @@ get_forex_data = function(from_month="01", to_month="09") {
     for (file in files) {
       df = read.csv2(file=file, header=FALSE) %>%
         dplyr::mutate(V1 = as.POSIXct(strptime(V1, format="%Y%m%d %H%M%S"), tz="UTC")) %>%
-        dplyr::mutate(V2 = log(as.numeric(V2))) %>% 
+        dplyr::mutate(V2 = as.numeric(V2)) %>% 
         dplyr::select(V1, V2)
       days = unique(as.Date(df[,1]))
       for (day in days) {
@@ -123,7 +123,7 @@ get_forex_data = function(from_month="01", to_month="09") {
 
 refresh_list = function(data) {
   assets = names(data)
-  days = names(data[["EURUSD"]])
+  days = names(data[["EURJPY"]])
   refresh_df = matrix(ncol=length(assets)+1) %>% 
     as.data.frame() %>% 
     magrittr::set_colnames(c(assets, "timestamp"))
@@ -150,64 +150,85 @@ refresh_list = function(data) {
 
 get_avg_time = function(data) {
   assets = names(data)
-  times = matrix(ncol=length(assets), nrow=2) %>% 
+  times = matrix(ncol=3, nrow=length(assets)) %>% 
     as.data.frame() %>% 
-    magrittr::set_colnames(assets) %>% 
-    magrittr::set_rownames(c("obs", "avg"))
+    magrittr::set_colnames(c("obs", "avg", "avg_trading")) %>% 
+    magrittr::set_rownames(assets)
   for (asset in assets) {
     hit_times = c()
     asset_list = data[[asset]]
+    obs = 0
+    time = 0
     for (list in asset_list) {
-      hit_times = c(index(list))
+      obs = obs + length(index(list))
+      time = time + length(index(list)) * mean(as.double(diff(as.POSIXct(index(list), origin="1970-01-01"))))
+      hit_times = c(hit_times, index(list))
     }
-    avg_time = mean(as.numeric(diff(as.POSIXct(hit_times))))
-    times[[asset]] = c(int(length(hit_times)), avg_time)
+    avg_time = mean(as.double(diff(as.POSIXct(hit_times, origin="1970-01-01"))))
+    times[asset, ] = c(obs, avg_time, time / obs)
   }
   return(times)
 }
 
-data = get_forex_data()
-times = get_avg_time(data)
-
-refresh_data = refresh_list(data)
-mean(as.numeric(diff(as.POSIXct(rownames(refresh_data)))))
-
-
-
-
-save(data, file="forex_list.Rdata")
-load(file="forex_list.RData")
-
-
-### Estimat ---------
-RC_est <- function(Y) {
-  if (is.null(nrow(Y)) && length(Y)!=0) {
-    Y <- matrix(Y, ncol = 1)
-  }
-  
-  n <- nrow(Y) - 1
-  d <- ncol(Y)
-  
-  res <- matrix(rep(0,d^2), ncol = d)
-  dY <- diff(Y)
+get_ms_noise = function(refresh_data) {
+  diff_y = diff(as.matrix(refresh_data))
+  n = nrow(diff_y)
+  res = 0
   for (i in 1:n) {
-    res <- res + dY[i,]%*%t(dY[i,])
+    res = res + diff_y[i,] %*% t(diff_y[i,])
   }
+  res = res / (2*n)
   return(res)
 }
 
-df1 = do.call(data.frame, test[[1]][1])
-df1[[1]] = log(as.numeric(df1[[1]]))
-colnames(df1) = "log-euraud"
+get_comp_df = function(data) {
+  times = get_avg_time(data) %>% arrange(avg)
+  assets = rownames(times) %>% rev()
+  info = matrix(ncol=5, nrow=length(assets)-1) 
+  
+  refresh_data = refresh_list(data)
+  info[1,1] = assets[1]
+  info[1,2] = ncol(refresh_data)
+  info[1,3] = nrow(refresh_data)
+  info[1,4] = mean(as.numeric(diff(as.POSIXct(rownames(refresh_data)))))
+  info[1,5] = get_ms_noise(refresh_data) %>% diag() %>% mean() %>% format(scientific = TRUE)
+  
+  data_res = data
+  counter = 2
+  for (asset in assets[1:(length(assets)-2)]) {
+    print(asset)
+    data_res[[asset]] = NULL
+    refresh_data = refresh_list(data_res)
+    info[counter,1] = assets[[counter]]
+    info[counter,2] = ncol(refresh_data)
+    info[counter,3] = nrow(refresh_data)
+    info[counter,4] = mean(as.numeric(diff(as.POSIXct(rownames(refresh_data)))))
+    info[counter,5] = get_ms_noise(refresh_data) %>% diag() %>% mean() %>% format(scientific = TRUE)
+    counter = counter + 1
+  }
+  info = info %>% as.data.frame() %>% 
+    magrittr::set_colnames(c("least", "nr_assets", "obs", "avg", "ms"))
+  return(info)
+}
 
-downsample = df1 %>% 
-  mutate(timestamp = as.POSIXct(row.names(.))) %>% 
-  group_by(grp = cut(timestamp, breaks = "5 min")) %>% 
-  summarise_all(first) %>% 
-  select(-grp)
+# Get data and times
+data = get_forex_data()
+times = get_avg_time(data) %>% arrange(avg)
 
-rc1 = RC_est(df1[[1]])
-rc2 = RC_est(downsample[[1]])
 
-avg_time = mean(diff(as.POSIXct(row.names(df1))))
+refresh_data = refresh_list(data)
+info = get_comp_df(data)
+
+# Save and load
+save(data, file="log_forex_list.Rdata")
+save(refresh_data, file="log_forex_refresh.RData")
+
+# Save and load
+save(data, file="forex_list.Rdata")
+save(refresh_data, file="forex_refresh.RData")
+
+# Save and load
+save(data, file="100_logforex_list.Rdata")
+save(refresh_data, file="100_logforex_refresh.RData")
+
 
