@@ -54,7 +54,7 @@ get_lobster_data = function(ticker) {
  return(message) 
 }
 
-get_polygon_time_series = function(ticker, multiplier="1", interval="minute", to_date="2023-09-11", from_date="2023-09-11") {
+get_polygon_time_series = function(ticker, multiplier="1", interval="minute", from_date="2023-09-03", to_date="2023-09-29") {
   ticker = toupper(ticker)
   api_key = paste0(
     "https://api.polygon.io/v2/aggs/ticker/", ticker, 
@@ -62,7 +62,7 @@ get_polygon_time_series = function(ticker, multiplier="1", interval="minute", to
     "/", interval,
     "/", from_date,
     "/", to_date,
-    "?adjusted=true&sort=asc&limit=50000&apiKey=yeGNbrt0UkaKA_Qmopz_gxbCy1m2_sDD"
+    "?adjusted=true&sort=asc&limit=50000&apiKey=e8jrQvnDb_qc0yjciOUCIq1cZGVvnZYm"
   )
   stock_df = jsonlite::fromJSON(api_key)$results %>%
     dplyr::mutate(timestamp = lubridate::as_datetime(t / 1000)) %>%
@@ -102,7 +102,7 @@ get_forex_data = function(from_month="01", to_month="09") {
     for (file in files) {
       df = read.csv2(file=file, header=FALSE) %>%
         dplyr::mutate(V1 = as.POSIXct(strptime(V1, format="%Y%m%d %H%M%S"), tz="UTC")) %>%
-        dplyr::mutate(V2 = as.numeric(V2)) %>% 
+        dplyr::mutate(V2 = log(as.numeric(V2))) %>% 
         dplyr::select(V1, V2)
       days = unique(as.Date(df[,1]))
       for (day in days) {
@@ -218,6 +218,128 @@ times = get_avg_time(data) %>% arrange(avg)
 
 refresh_data = refresh_list(data)
 info = get_comp_df(data)
+
+
+# Get stock data
+# https://www.investing.com/equities/most-active-stocks
+tickers = c("TSLA", "T", "AAPL", "PLTR", "AMD", "BAC", "AMZN", "NVDA", "PFE", "INTC")
+
+get_polygon_df = function(tickers, multiplier="1", interval="minute", from_date="2023-09-03", to_date="2023-09-29") {
+  df = FALSE
+  for (ticker in tickers) {
+    print(ticker)
+    if (isFALSE(df)) {
+      time_series = get_polygon_time_series(ticker, multiplier=multiplier, interval=interval, to_date=to_date, from_date=from_date)
+      df = time_series
+      colnames(time_series) = c("timestamp", ticker)
+    } else {
+      Sys.sleep(20)
+      time_series = get_polygon_time_series(ticker, multiplier=multiplier, interval=interval, to_date=to_date, from_date=from_date)
+      colnames(time_series) = c("timestamp", ticker)
+      
+      df = merge(df, time_series, by="timestamp", all=TRUE)
+
+    }
+  }
+  df$timestamp = as.POSIXct(df$timestamp, tz="UTC")
+  return(df)
+}
+
+get_stock_avg_time = function(stock_df) {
+  tickers = colnames(stock_df)[2:ncol(stock_df)]
+  time_df = matrix(ncol=3, nrow=ncol(stock_df)-1) %>% 
+    as.data.frame() %>% 
+    magrittr::set_rownames(tickers) %>% 
+    magrittr::set_colnames(c("obs", "avg", "avg_trading"))
+  
+  for (ticker in tickers) {
+    sub_df = stock_df[, c("timestamp", ticker)] %>% na.omit()
+    time_df[ticker, 1] = nrow(sub_df)
+    time_df[ticker, 2] = diff(sub_df$timestamp) %>% mean()
+    time_df[ticker, 3] = diff(sub_df$timestamp) %>% ifelse(. > 120, 1, .) %>% mean()    
+  }
+  time_df = time_df %>% arrange(avg)
+  return(time_df)
+}
+
+get_stock_refresh = function(stock_df) {
+  tickers = colnames(stock_df)[2:ncol(stock_df)]
+  observed = list()
+  for (ticker in tickers) {
+    observed[[ticker]] = FALSE
+  }
+  
+  times = matrix(ncol=ncol(stock_df), nrow=nrow(stock_df))
+  for (i in 1:nrow(stock_df)) {
+    row = stock_df[i, ]
+    for (ticker in tickers) {
+      if (isFALSE(observed[[ticker]])) {
+        if (is.na(row[[ticker]])) {
+          next
+        } else {
+          observed[[ticker]] = row[[ticker]]
+        }
+      }
+    }
+    if (all(sapply(observed, function(x) x != FALSE))) {
+      times[i, 1] = row[["timestamp"]]
+      times[i, 2:ncol(times)] = unlist(unname(observed))
+      observed = lapply(observed, function(x) FALSE)
+    }
+  }
+  times = as.data.frame(times) %>% 
+    na.omit() %>% 
+    magrittr::set_colnames(c("timestamp", tickers)) %>% 
+    dplyr::mutate(timestamp = as.POSIXct(timestamp, origin="1970-01-01", tz="UTC"))
+  return(times)
+}
+
+get_refresh_avg_time = function(stock_df) {
+  times = get_stock_avg_time(stock_df)
+  tickers = times %>% rownames(.) %>% rev()
+  info = matrix(ncol=6, nrow=length(tickers)-1)
+  
+  refresh_data = get_stock_refresh(stock_df)
+  rownames(refresh_data) = refresh_data$timestamp
+  refresh_data$timestamp = NULL
+  info[1, 1] = tickers[1]
+  info[1, 2] = ncol(refresh_data)
+  info[1, 3] = nrow(refresh_data)
+  info[1, 4] = mean(as.numeric(diff(as.POSIXct(rownames(refresh_data)))))
+  info[1, 5] = rownames(refresh_data) %>% as.POSIXct() %>% diff() %>% ifelse(. > 120, 1, .) %>% as.numeric %>% mean()
+  info[1, 6] = get_ms_noise(refresh_data) %>% diag() %>% mean() %>% format(scientific = TRUE)
+  
+  data_res = stock_df
+  counter = 2
+  for (ticker in tickers[1:(length(tickers)-2)]) {
+    print(ticker)
+    data_res[[ticker]] = NULL
+    refresh_data = get_stock_refresh(data_res)
+    rownames(refresh_data) = refresh_data$timestamp
+    refresh_data$timestamp = NULL
+    info[counter, 1] = tickers[counter]
+    info[counter, 2] = ncol(refresh_data)
+    info[counter, 3] = nrow(refresh_data)
+    info[counter, 4] = mean(as.numeric(diff(as.POSIXct(rownames(refresh_data)))))
+    info[counter, 5] = rownames(refresh_data) %>% as.POSIXct() %>% diff() %>% ifelse(. > 120, 1, .) %>% as.numeric %>% mean()
+    info[counter, 6] = get_ms_noise(refresh_data) %>% diag() %>% mean() %>% format(scientific = TRUE)
+    counter = counter + 1
+  }
+  info = as.data.frame(info) %>%
+    magrittr::set_colnames(c("least", "nr_assets", "obs", "avg", "avg_trading", "ms"))
+  return(info)
+}
+
+stock_df = get_polygon_df(tickers)
+times = get_stock_avg_time(stock_df)
+
+refresh_stock = get_stock_refresh(stock_df)
+info = get_refresh_avg_time(stock_df)
+
+log_stock_df = stock_df
+log_stock_df[2:ncol(log_stock_df)] = log(stock_df[2:ncol(stock_df)])
+
+info = get_refresh_avg_time(log_stock_df)
 
 # Save and load
 save(data, file="log_forex_list.Rdata")
