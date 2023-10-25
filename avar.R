@@ -314,6 +314,10 @@ RMSE <- function(true_cov, est) {
   return(sqrt(mean((est-true_cov)^2)))
 }
 
+BIAS <- function(true_cov, est) {
+  return(sum(true_cov - est))
+}
+
 rolling_window_estimation <- function(days, nprday, n_prices, gamma2) {
   simulation <- simulate_prices(
     n_prices = n_prices, 
@@ -384,12 +388,20 @@ confidence_plot <- function(rwest_result) {
   return(p)
 }
 
-update_sampling_freq <- function(Y, lambdas) {
+update_sampling_freq <- function(Y, lambdas, poi = NULL) {
   d <- ncol(Y)
   n <- nrow(Y) - 1
   
+  if (is.null(poi)) {
+    poi <- matrix(ncol = d)
+    for (i in 1:d) {
+      poi[,i] <- cumsum(rexp(2*n, 1/lambdas[[i]]))
+    }
+  }
+  
   for (i in 1:d) {
-    poisson_proc <- cumsum(rexp(2*n, 1/lambdas[[i]]))
+    poisson_proc <- poi[,i]
+    
     end_index <- head(which(poisson_proc>n),1)
     updated_poisson <- poisson_proc[1:end_index]
     sampling <- sapply(X = updated_poisson, FUN = ceiling) %>%
@@ -398,8 +410,6 @@ update_sampling_freq <- function(Y, lambdas) {
     new_sampling <- rep(1,n+1)
     start_index <- 1
     for (j in 2:(n+1)) {
-      if (is.na(sampling[start_index]+1)){browser()}
-      # print(j);print(sampling[start_index]+1)
       if (j == sampling[start_index]+1) {
         new_sampling[j] <- sampling[start_index] + 1
         start_index <- start_index+1
@@ -413,6 +423,14 @@ update_sampling_freq <- function(Y, lambdas) {
 }
 
 simulation <- function(lambda1, lambda2){
+  gamma2 <- list(
+    'MS1' = 10^(-3),
+    'MS2' = 10^(-5), 
+    'MS3' = 10^(-7), 
+    'MS4' = 10^(-9),
+    'MS0' = 0
+  )
+  
   apply_noise <- function(EffPriceMat, sigma, gamma2) {
     res_mat <- EffPriceMat
     for (i in 1:ncol(EffPriceMat)){
@@ -424,54 +442,74 @@ simulation <- function(lambda1, lambda2){
   #Generate effiecient price
   EfficientPrice <- simulate_prices(2, Tend = 1, N = 86400, gamma2 = 0)
   
-  #Apply three levels of noise
-  Y1 <- EfficientPrice$X
-  Y2 <- apply_noise(EfficientPrice$X, EfficientPrice$sigma, gamma2 = 0.001)
-  Y3 <- apply_noise(EfficientPrice$X, EfficientPrice$sigma, gamma2 = 0.01)
+  #Apply levels of noise
+  YwN <- lapply(
+    gamma2, 
+    apply_noise, 
+    EffPriceMat = EfficientPrice$X, 
+    sigma = EfficientPrice$sigma
+  ) %>% magrittr::set_names(names(gamma2))
   
   #Update sampling frequency of the three prices
-  Y1PriceAS <- update_sampling_freq(Y1,lambdas = list(lambda1, lambda2))
-  Y2PriceAS <- update_sampling_freq(Y2,lambdas = list(lambda1, lambda2))
-  Y3PriceAS <- update_sampling_freq(Y3,lambdas = list(lambda1, lambda2))
+  poi_mat <- matrix( #Creating poisson process matrix to drive AS
+    c(
+      cumsum(rexp(2*86400, 1/lambda1)),
+      cumsum(rexp(2*86400, 1/lambda2))
+    ),
+    ncol = 2
+  )
+  
+  YwNAS <- lapply(
+    YwN, 
+    update_sampling_freq, 
+    lambdas = list(lambda1, lambda2),
+    poi = poi_mat
+  ) %>% 
+    magrittr::set_names(names(YwN))
   
   #Define the true Cov
   TrueCov <- EfficientPrice[["cov"]][[1]]
-  browser()
   #Microstructure noise / no asynchronization
-  RC1 <- RC_est(Y1)
-  RC2 <- RC_est(Y2)
-  RC3 <- RC_est(Y3)
+  RC <- lapply(YwN, RC_est)
+  MRC <- lapply(YwN, MRC_est)
   
-  MRC1 <- MRC_est(Y1)
-  MRC2 <- MRC_est(Y2)
-  MRC3 <- MRC_est(Y3)
-  
-  res1 <- data.frame(
-    'MSLevel' = 1:3, 
-    'RC_RMSE' = c(RMSE(TrueCov,RC1), RMSE(TrueCov,RC2), RMSE(TrueCov,RC3)),
-    'RC_MAE'  = c(MAE(TrueCov,RC1), MAE(TrueCov,RC2), MAE(TrueCov,RC3)),
-    'MRC_RMSE'= c(RMSE(TrueCov,MRC1), RMSE(TrueCov,MRC2), RMSE(TrueCov,MRC3)),
-    'MRC_MAE' = c(MAE(TrueCov,MRC1), MAE(TrueCov,MRC2), MAE(TrueCov,MRC3))
-    )
-  
-  #Microstructure noise / asynchronization
-  RC1 <- RC_est(Y1PriceAS)
-  RC2 <- RC_est(Y2PriceAS)
-  RC3 <- RC_est(Y3PriceAS)
-  
-  MRC1 <- MRC_est(Y1PriceAS)
-  MRC2 <- MRC_est(Y2PriceAS)
-  MRC3 <- MRC_est(Y3PriceAS)
-  
-  res2 <- data.frame(
-    'MSLevel' = 1:3, 
-    'RC_RMSE' = c(RMSE(TrueCov,RC1), RMSE(TrueCov,RC2), RMSE(TrueCov,RC3)),
-    'RC_MAE'  = c(MAE(TrueCov,RC1), MAE(TrueCov,RC2), MAE(TrueCov,RC3)),
-    'MRC_RMSE'= c(RMSE(TrueCov,MRC1), RMSE(TrueCov,MRC2), RMSE(TrueCov,MRC3)),
-    'MRC_MAE' = c(MAE(TrueCov,MRC1), MAE(TrueCov,MRC2), MAE(TrueCov,MRC3))
+  res <- matrix(
+    c(
+      unname(unlist(lapply(RC, RMSE, TrueCov))),
+      unname(unlist(lapply(RC, MAE, TrueCov))),
+      unname(unlist(lapply(RC, BIAS, TrueCov))),
+      unname(unlist(lapply(MRC, RMSE, TrueCov))),
+      unname(unlist(lapply(MRC, MAE, TrueCov))),
+      unname(unlist(lapply(MRC, BIAS, TrueCov)))
+    ),
+    ncol = 6
+  ) %>% magrittr::set_colnames(
+    c('RC_RMSE', 'RC_MAE', 'RC_BIAS', 'MRC_RMSE', 'MRC_MAE', 'MRC_BIAS')
+  ) %>% magrittr::set_rownames(
+    names(gamma2)
   )
   
-  return(list("Res1" = res1, "Res2" = res2))
+  #Microstructure noise / asynchronization
+  RCAS <- lapply(YwNAS, RC_est)
+  MRCAS <- lapply(YwNAS, MRC_est)
+  
+  resAS <- matrix(
+    c(
+      unname(unlist(lapply(RCAS, RMSE, TrueCov))),
+      unname(unlist(lapply(RCAS, MAE, TrueCov))),
+      unname(unlist(lapply(RCAS, BIAS, TrueCov))),
+      unname(unlist(lapply(MRCAS, RMSE, TrueCov))),
+      unname(unlist(lapply(MRCAS, MAE, TrueCov))),
+      unname(unlist(lapply(MRCAS, BIAS, TrueCov)))
+    ),
+    ncol = 6
+  ) %>% magrittr::set_colnames(
+    c('RC_RMSE', 'RC_MAE', 'RC_BIAS', 'MRC_RMSE', 'MRC_MAE', 'MRC_BIAS')
+  ) %>% magrittr::set_rownames(
+    names(gamma2)
+  )
+  
+  return(list("Res" = res, "ResAS" = resAS))
 }
 
 ### Testing -------------------------------------------------------------------
@@ -500,6 +538,8 @@ updated_Y <- update_sampling_freq(
 set.seed(123)
 rwest_result <- rolling_window_estimation(30, 10000, 2, 0.001)
 saveRDS(rwest_result, "rwest_result")
+
+test <- matrix(c(1:3,1:3), ncol = 2)
 
 TEST <- simulation(lambda1 = 1, lambda2 = 3)
 
