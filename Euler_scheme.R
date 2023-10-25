@@ -10,11 +10,11 @@ suppressMessages({
 })
 
 ### Magic numbers -------------------------------------------------------------
-# Tend <- 6.5
-# N <- Tend*3600
-# beta0 <- -5/16
-# beta1 <- 1/8
-# Tinterval <- seq(0,Tend, by = Tend/N)
+Tend <- 6.5
+N <- Tend*3600
+beta0 <- -5/16
+beta1 <- 1/8
+Tinterval <- seq(0,Tend, by = Tend/N)
 
 ### Functions -----------------------------------------------------------------
 OU_exact <- function(
@@ -157,7 +157,7 @@ simulate_prices <- function(n_prices, Tend, N, gamma2, return_cov = T) {
         N = N/Tend
       )
     }
-    return(list("XwN" = XwN, "cov" = cov_list))
+    return(list("XwN" = XwN, "X" = X, "sigma" = sigma, "cov" = cov_list))
   }
   
   return(XwN)

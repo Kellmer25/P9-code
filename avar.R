@@ -290,13 +290,6 @@ confidence_intervals <- function(Y, mrc, avar) {
   return(list("lower" = lower_mat, "upper" = upper_mat))
 }
 
-
-for (i in 1:2) {
-  for (j in 1:2) {
-    print((i-1)*d+j)
-  }
-}
-
 RC_est <- function(Y) {
   if (is.null(nrow(Y)) && length(Y)!=0) {
     Y <- matrix(Y, ncol = 1)
@@ -391,6 +384,96 @@ confidence_plot <- function(rwest_result) {
   return(p)
 }
 
+update_sampling_freq <- function(Y, lambdas) {
+  d <- ncol(Y)
+  n <- nrow(Y) - 1
+  
+  for (i in 1:d) {
+    poisson_proc <- cumsum(rexp(2*n, 1/lambdas[[i]]))
+    end_index <- head(which(poisson_proc>n),1)
+    updated_poisson <- poisson_proc[1:end_index]
+    sampling <- sapply(X = updated_poisson, FUN = ceiling) %>%
+      unique()
+    
+    new_sampling <- rep(1,n+1)
+    start_index <- 1
+    for (j in 2:(n+1)) {
+      if (is.na(sampling[start_index]+1)){browser()}
+      # print(j);print(sampling[start_index]+1)
+      if (j == sampling[start_index]+1) {
+        new_sampling[j] <- sampling[start_index] + 1
+        start_index <- start_index+1
+      } else {
+        new_sampling[j] <- new_sampling[j-1]
+      }
+    }
+    Y[,i] <- Y[new_sampling,i]
+  }
+  return(Y)
+}
+
+simulation <- function(lambda1, lambda2){
+  apply_noise <- function(EffPriceMat, sigma, gamma2) {
+    res_mat <- EffPriceMat
+    for (i in 1:ncol(EffPriceMat)){
+      res_mat[,i] <- msNoise(gamma2, sigma[,i], X = EffPriceMat[,i])
+    }
+    return(res_mat)
+  }
+  
+  #Generate effiecient price
+  EfficientPrice <- simulate_prices(2, Tend = 1, N = 86400, gamma2 = 0)
+  
+  #Apply three levels of noise
+  Y1 <- EfficientPrice$X
+  Y2 <- apply_noise(EfficientPrice$X, EfficientPrice$sigma, gamma2 = 0.001)
+  Y3 <- apply_noise(EfficientPrice$X, EfficientPrice$sigma, gamma2 = 0.01)
+  
+  #Update sampling frequency of the three prices
+  Y1PriceAS <- update_sampling_freq(Y1,lambdas = list(lambda1, lambda2))
+  Y2PriceAS <- update_sampling_freq(Y2,lambdas = list(lambda1, lambda2))
+  Y3PriceAS <- update_sampling_freq(Y3,lambdas = list(lambda1, lambda2))
+  
+  #Define the true Cov
+  TrueCov <- EfficientPrice[["cov"]][[1]]
+  browser()
+  #Microstructure noise / no asynchronization
+  RC1 <- RC_est(Y1)
+  RC2 <- RC_est(Y2)
+  RC3 <- RC_est(Y3)
+  
+  MRC1 <- MRC_est(Y1)
+  MRC2 <- MRC_est(Y2)
+  MRC3 <- MRC_est(Y3)
+  
+  res1 <- data.frame(
+    'MSLevel' = 1:3, 
+    'RC_RMSE' = c(RMSE(TrueCov,RC1), RMSE(TrueCov,RC2), RMSE(TrueCov,RC3)),
+    'RC_MAE'  = c(MAE(TrueCov,RC1), MAE(TrueCov,RC2), MAE(TrueCov,RC3)),
+    'MRC_RMSE'= c(RMSE(TrueCov,MRC1), RMSE(TrueCov,MRC2), RMSE(TrueCov,MRC3)),
+    'MRC_MAE' = c(MAE(TrueCov,MRC1), MAE(TrueCov,MRC2), MAE(TrueCov,MRC3))
+    )
+  
+  #Microstructure noise / asynchronization
+  RC1 <- RC_est(Y1PriceAS)
+  RC2 <- RC_est(Y2PriceAS)
+  RC3 <- RC_est(Y3PriceAS)
+  
+  MRC1 <- MRC_est(Y1PriceAS)
+  MRC2 <- MRC_est(Y2PriceAS)
+  MRC3 <- MRC_est(Y3PriceAS)
+  
+  res2 <- data.frame(
+    'MSLevel' = 1:3, 
+    'RC_RMSE' = c(RMSE(TrueCov,RC1), RMSE(TrueCov,RC2), RMSE(TrueCov,RC3)),
+    'RC_MAE'  = c(MAE(TrueCov,RC1), MAE(TrueCov,RC2), MAE(TrueCov,RC3)),
+    'MRC_RMSE'= c(RMSE(TrueCov,MRC1), RMSE(TrueCov,MRC2), RMSE(TrueCov,MRC3)),
+    'MRC_MAE' = c(MAE(TrueCov,MRC1), MAE(TrueCov,MRC2), MAE(TrueCov,MRC3))
+  )
+  
+  return(list("Res1" = res1, "Res2" = res2))
+}
+
 ### Testing -------------------------------------------------------------------
 source("Euler_scheme.R")
 sim <- simulate_prices(n_prices = 2, Tend = 1, N = 86400, gamma2 = 0.001)
@@ -409,9 +492,16 @@ pdata <- matrix_to_dt(exp(Y), return_list = T)
 hf_mrc <- highfrequency::rMRCov(pdata,crossAssetNoiseCorrection = T, makePsd = F, theta = 0.8);hf_mrc
 hf_mrc - mrc
 
+updated_Y <- update_sampling_freq(
+  Y, 
+  lambdas = list("lambda1" = 1, "lambda2" = 1)
+)
+
 set.seed(123)
 rwest_result <- rolling_window_estimation(30, 10000, 2, 0.001)
 saveRDS(rwest_result, "rwest_result")
+
+TEST <- simulation(lambda1 = 1, lambda2 = 3)
 
 
 
