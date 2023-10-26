@@ -48,11 +48,11 @@ get_lobster_data = function(ticker) {
       ask = round(ask / 10000, 2),
       bid = round(bid / 10000, 2)
     ) %>% 
-      dplyr::filter(row_number() <= n()-1)
+    dplyr::filter(row_number() <= n()-1)
   message = message %>%
     dplyr::mutate(bid = orderbook$bid, .before = price) %>%
     dplyr::mutate(ask = orderbook$ask, .after = price)
- return(message) 
+  return(message) 
 }
 
 get_polygon_time_series = function(ticker, multiplier="1", interval="minute", from_date="2023-09-03", to_date="2023-09-29") {
@@ -239,7 +239,7 @@ get_polygon_df = function(tickers, multiplier="1", interval="minute", from_date=
       colnames(time_series) = c("timestamp", ticker)
       
       df = merge(df, time_series, by="timestamp", all=TRUE)
-
+      
     }
   }
   df$timestamp = as.POSIXct(df$timestamp, tz="UTC")
@@ -337,7 +337,90 @@ transform_results <- function(lambda_level, simulation_result) {
   for (i in 1:1000) {
     res <- res + simulation_result[[lambda_level]][[i]][[1]]
   }
-  return(1/1000*res)
+  return(as.data.frame(1/1000*res))
+}
+
+results_to_table <- function(simulation_result){
+  results <- lapply(
+    1:4, 
+    transform_results, 
+    simulation_result = simulation_result
+  )
+  
+  rbound_res <- purrr::map_dfr(results, function(x){return(x)}) %>% 
+    dplyr::mutate(Noise = substr(rownames(.), 1, 3)) %>% 
+    magrittr::set_rownames(NULL) %>% 
+    dplyr::select(
+      Noise,
+      "bias" = RC_BIAS,
+      "mae" = RC_MAE,
+      "rmse" = RC_RMSE,
+      "mbias" = MRC_BIAS,
+      "mmae" = MRC_MAE,
+      "mrmse" = MRC_RMSE
+    ) %>% 
+    mutate_if(is.numeric, round, 3) %>% 
+    dplyr::add_row(
+      Noise = "0",
+      bias = 0,
+      rmse = 0,
+      mae = 0,
+      mbias = 0,
+      mrmse = 0,
+      mmae = 0, 
+      .before = 1
+      ) %>% 
+    dplyr::add_row(
+      Noise = "0",
+      bias = 0,
+      rmse = 0,
+      mae = 0,
+      mbias = 0,
+      mrmse = 0,
+      mmae = 0, 
+      .before = 7
+    ) %>% 
+    dplyr::add_row(
+      Noise = "0",
+      bias = 0,
+      rmse = 0,
+      mae = 0,
+      mbias = 0,
+      mrmse = 0,
+      mmae = 0, 
+      .before = 13
+    ) %>% 
+    dplyr::add_row(
+      Noise = "0",
+      bias = 0,
+      rmse = 0,
+      mae = 0,
+      mbias = 0,
+      mrmse = 0,
+      mmae = 0, 
+      .before = 19
+    )
+  
+  latex_table <- kbl(
+    rbound_res, 
+    longtable = T, 
+    booktabs = T,
+    format = "latex",
+    linesep = c("", "", "", "", "", paste0("\\addlinespace")),
+    caption = "Longtable"
+  ) %>%
+    add_header_above(c(" ", "RC" = 3, "MRC" = 3)) %>%
+    kable_styling(
+      latex_options = c(
+        "repeat_header", 
+        "striped"),
+      stripe_index = c(1:6, 13:18),
+      position = "center"
+    ) %>%
+    column_spec(2:7, width = "2cm")
+  
+  clipr::write_clip(latex_table)
+  
 }
 
 stock_df = get_polygon_df(tickers)
