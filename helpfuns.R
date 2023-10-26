@@ -6,6 +6,7 @@ suppressMessages({
   library(lubridate)
   library(xts)
   library(highfrequency)
+  library(kableExtra)
 })
 
 ### Functions -----------------------------------------------------------------
@@ -328,6 +329,15 @@ get_refresh_avg_time = function(stock_df) {
   info = as.data.frame(info) %>%
     magrittr::set_colnames(c("least", "nr_assets", "obs", "avg", "avg_trading", "ms"))
   return(info)
+}
+
+transform_results <- function(lambda_level, simulation_result) {
+  
+  res <- matrix(rep(0,5*6),nrow = 5, ncol = 6)
+  for (i in 1:1000) {
+    res <- res + simulation_result[[lambda_level]][[i]][[1]]
+  }
+  return(1/1000*res)
 }
 
 stock_df = get_polygon_df(tickers)
