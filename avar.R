@@ -445,12 +445,6 @@ refreshData <- function(Y_mat) {
   return(res)
 }
 
-ep <- lapply(
-  1:10, 
-  simulate_prices,
-  n_prices = 2, Tend = 1, N = 86400, gamma2 = 0
-)
-
 simulation <- function(lambda1, lambda2, EfficientPrice){
   gamma2 <- list(
     'MS1' = 10^(-3),
@@ -548,7 +542,8 @@ MAE(sim$cov, mrc);RMSE(sim$cov, mrc)
 MAE(sim$cov, rc);RMSE(sim$cov, rc)
 
 pdata <- matrix_to_dt(exp(Y), return_list = T)
-hf_mrc <- highfrequency::rMRCov(pdata,crossAssetNoiseCorrection = T, makePsd = F, theta = 0.8);hf_mrc
+hf_mrc <- highfrequency::rMRCov(
+  pdata,crossAssetNoiseCorrection = T, makePsd = F, theta = 0.8);hf_mrc
 hf_mrc - mrc
 
 updated_Y <- update_sampling_freq(
@@ -570,6 +565,32 @@ for (i in 1:1000) {
 tic()
 TEST <- simulation(lambda1 = 30, lambda2 = 60)
 toc()
+
+### Simulation ----------------------------------------------------------------
+set.seed(123)
+lambdas <- list(c(0,0), c(1,2), c(3,5), c(5,10), c(10,20))
+tic()
+EffPrice <- lapply(
+  1:1, 
+  simulate_prices,
+  n_prices = 2, Tend = 1, N = 86400, gamma2 = 0
+)
+simulation_result <- lapply(
+  X = lambdas,
+  FUN = function(lambdas, EfficientPrice) {
+    res <- lapply(
+      X = EfficientPrice, 
+      FUN = simulation,
+      lambda1 = lambdas[1], lambda2 = lambdas[2]
+    )
+    return(res)
+  },
+  EfficientPrice = EffPrice
+)
+# saveRDS(simulation_result, "simulation_result")
+toc()
+
+
 
 
 
