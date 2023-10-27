@@ -422,7 +422,36 @@ update_sampling_freq <- function(Y, lambdas, poi = NULL) {
   return(Y)
 }
 
-simulation <- function(lambda1, lambda2){
+refreshData <- function(Y_mat) {
+  update_logic <- matrix(rep(FALSE, nrow(Y_mat)*2), nrow = nrow(Y_mat))
+  
+  for (i in 2:nrow(Y_mat)) {
+    for (j in 1:ncol(Y_mat)) {
+      if (Y_mat[i,j] != Y_mat[i-1,j]) {
+        update_logic[i,j] <- TRUE
+      }
+      if (update_logic[i-1,j] & !all(update_logic[i-1,])) {
+        update_logic[i,j] <- TRUE
+      }
+    }
+  }
+  
+  indexes_to_keep <- sapply(rowSums(update_logic), function(number) {
+    if (number == 2) {return(T)} else {return(F)}
+  })
+  
+  res <- Y_mat[indexes_to_keep,]
+  
+  return(res)
+}
+
+ep <- lapply(
+  1:10, 
+  simulate_prices,
+  n_prices = 2, Tend = 1, N = 86400, gamma2 = 0
+)
+
+simulation <- function(lambda1, lambda2, EfficientPrice){
   gamma2 <- list(
     'MS1' = 10^(-3),
     'MS2' = 10^(-5), 
@@ -438,9 +467,6 @@ simulation <- function(lambda1, lambda2){
     }
     return(res_mat)
   }
-  
-  #Generate effiecient price
-  EfficientPrice <- simulate_prices(2, Tend = 1, N = 86400, gamma2 = 0)
   
   #Apply levels of noise
   YwN <- lapply(
@@ -459,17 +485,25 @@ simulation <- function(lambda1, lambda2){
     ncol = 2
   )
   
-  YwNAS <- lapply(
-    YwN, 
-    update_sampling_freq, 
-    lambdas = list(lambda1, lambda2),
-    poi = poi_mat
-  ) %>% 
-    magrittr::set_names(names(YwN))
+  if (lambda1 != 0 & lambda2 != 0){
+    YwNAS <- lapply(
+      YwN, 
+      update_sampling_freq, 
+      lambdas = list(lambda1, lambda2),
+      poi = poi_mat
+    ) %>% 
+      lapply(
+        .,
+        refreshData
+      ) %>% 
+      magrittr::set_names(names(YwN))
+    YwN <- YwNAS
+  }
   
   #Define the true Cov
   TrueCov <- EfficientPrice[["cov"]][[1]]
-  #Microstructure noise / no asynchronization
+  #Estimate and append results
+  
   RC <- lapply(YwN, RC_est)
   MRC <- lapply(YwN, MRC_est)
   
@@ -489,27 +523,14 @@ simulation <- function(lambda1, lambda2){
     names(gamma2)
   )
   
-  #Microstructure noise / asynchronization
-  RCAS <- lapply(YwNAS, RC_est)
-  MRCAS <- lapply(YwNAS, MRC_est)
-  
-  resAS <- matrix(
-    c(
-      unname(unlist(lapply(RCAS, RMSE, TrueCov))),
-      unname(unlist(lapply(RCAS, MAE, TrueCov))),
-      unname(unlist(lapply(RCAS, BIAS, TrueCov))),
-      unname(unlist(lapply(MRCAS, RMSE, TrueCov))),
-      unname(unlist(lapply(MRCAS, MAE, TrueCov))),
-      unname(unlist(lapply(MRCAS, BIAS, TrueCov)))
-    ),
-    ncol = 6
-  ) %>% magrittr::set_colnames(
-    c('RC_RMSE', 'RC_MAE', 'RC_BIAS', 'MRC_RMSE', 'MRC_MAE', 'MRC_BIAS')
-  ) %>% magrittr::set_rownames(
-    names(gamma2)
-  )
-  
-  return(list("Res" = res, "ResAS" = resAS))
+  return(list(
+    "Res" = res, 
+    "lambdas" = c(lambda1, lambda2), 
+    "MRC" = MRC, 
+    "RC" = RC,
+    "TrueCov" = TrueCov,
+    "n" = nrow(YwN$MS0)
+  ))
 }
 
 ### Testing -------------------------------------------------------------------
@@ -541,8 +562,14 @@ saveRDS(rwest_result, "rwest_result")
 
 test <- matrix(c(1:3,1:3), ncol = 2)
 
-TEST <- simulation(lambda1 = 1, lambda2 = 3)
+RC_bias <- rep(0,1000)
+for (i in 1:1000) {
+  RC_bias[i] <- simulation_result[[1]][[i]][[1]][5,3]
+}
 
+tic()
+TEST <- simulation(lambda1 = 30, lambda2 = 60)
+toc()
 
 
 
