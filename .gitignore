@@ -2,8 +2,9 @@
 .Rhistory
 .Rapp.history
 
-# Ignore golder
+# Ignore folder
 Ignore/	
+P9-code.RProj
 
 # Session Data files
 .RData
