@@ -27,10 +27,21 @@ Get_Eikon <- function(filename,Date = c("2023-08-25")){
       Timestamp = as.POSIXct(Timestamp, format = "%d-%b-%Y %H:%M:%OS")
     ) %>% 
     dplyr::filter(lubridate::date(Timestamp) %in% Dates)
-  
   return(Data)
 }
 
+get_ms_noise = function(refresh_data) {
+  diff_y = diff(as.matrix(refresh_data))
+  n = nrow(diff_y)
+  res = 0
+  for (i in 1:n) {
+    res = res + diff_y[i,] %*% t(diff_y[i,])
+  }
+  res = res / (2*n)
+  return(res)
+}
+
+### Lobster data ---------------------------------------------------------------
 get_lobster_data = function(ticker) {
   ticker = toupper(ticker)
   message = read.csv(paste0("Message/", ticker, "_2012-06-21_34200000_57600000_message_1.csv")) %>%
@@ -54,6 +65,7 @@ get_lobster_data = function(ticker) {
   return(message) 
 }
 
+### Polygon --------------------------------------------------------------------
 get_polygon_time_series = function(ticker, multiplier="1", interval="minute", from_date="2023-09-03", to_date="2023-09-29") {
   ticker = toupper(ticker)
   api_key = paste0(
@@ -78,6 +90,7 @@ get_polygon_time_series = function(ticker, multiplier="1", interval="minute", fr
   return(stock_df)
 }
 
+### Forex data -----------------------------------------------------------------
 get_forex_data_dfs = function(from_month="01", to_month="09") {
   paths = list.files(path="Forex/", pattern=NULL, all.files=FALSE, full.names=TRUE)
   months = paste0("20230", seq(from_month, to_month))
@@ -115,21 +128,6 @@ get_forex_data_dfs = function(from_month="01", to_month="09") {
     counter = counter + 1
   }
   return(data)
-}
-
-get_empirical_data = function(data) {
-  assets = names(data)
-  diff_list = list()
-  acf_list = list()
-  for (asset in assets) {
-    asset_df = data[[asset]]
-    times = asset_df$time[2:nrow(asset_df)]
-    diffs = as.double(diff(asset_df$time))
-    diff_df = data.frame(times, diffs)
-    diff_list[[asset]] = diff_df
-    acf_list[[asset]] = acf(asset_df[[asset]])$acf
-  }
-  return(list("diff"=diff_list, "acf"=acf_list))
 }
 
 get_forex_data = function(from_month="01", to_month="09") {
@@ -173,6 +171,21 @@ get_forex_data = function(from_month="01", to_month="09") {
     counter = counter + 1
   }
   return(data)
+}
+
+get_empirical_data = function(data) {
+  assets = names(data)
+  diff_list = list()
+  acf_list = list()
+  for (asset in assets) {
+    asset_df = data[[asset]]
+    times = asset_df$time[2:nrow(asset_df)]
+    diffs = as.double(diff(asset_df$time))
+    diff_df = data.frame(times, diffs)
+    diff_list[[asset]] = diff_df
+    acf_list[[asset]] = acf(asset_df[[asset]])$acf
+  }
+  return(list("diff"=diff_list, "acf"=acf_list))
 }
 
 refresh_list = function(data) {
@@ -224,17 +237,6 @@ get_avg_time = function(data) {
   return(times)
 }
 
-get_ms_noise = function(refresh_data) {
-  diff_y = diff(as.matrix(refresh_data))
-  n = nrow(diff_y)
-  res = 0
-  for (i in 1:n) {
-    res = res + diff_y[i,] %*% t(diff_y[i,])
-  }
-  res = res / (2*n)
-  return(res)
-}
-
 get_comp_df = function(data, return_matrices=TRUE, return_diff=TRUE) {
   times = get_avg_time(data) %>% arrange(avg)
   assets = rownames(times) %>% rev()
@@ -280,62 +282,19 @@ get_comp_df = function(data, return_matrices=TRUE, return_diff=TRUE) {
   return(info)
 }
 
-# Initial data analysis
-data = get_forex_data_dfs()
-info = get_empirical_data(data)
-
-diff_data = info[["diff"]]
-acf_data = info[["acf"]]
-
-jpy_data = info[["diff"]][["EURJPY"]]
-
-jpy_data %>% filter(diffs > 60) %>% View()
-View(jpy_data[7180572:(7180572+2000), ])
-
-ggplot(jpy_data[1:8000, ], aes(x=times, y=diffs)) + 
-  geom_line()
-
-
-# Get data and times
-data = get_forex_data()
-times = get_avg_time(data) %>% arrange(avg)
-
-refresh_data = refresh_list(data)
-info = get_comp_df(data)
-
-test = get_comp_df(data)
-matrices = test[["matrices"]]
-
-for (matrix in matrices) {
-  matrix %>% diag() %>% norm(type="2") %>% print()
-}
-
-# MS EURJPY
-tester = matrix(ncol=2) %>% as.data.frame()
-for (item in data$EURJPY) {
-  item = item %>% 
-    as.data.frame() %>% 
-    magrittr::set_colnames(c("V2")) %>% 
-    mutate(V1 = as.POSIXct(index(item), origin="1970-01-01", tz="utc"), .before=1)
-  tester = rbind(tester, item)
-}
-tester = tester %>% na.omit()
-get_ms_noise(tester$V2)
-
-
-# SPX data
+### SPX data -------------------------------------------------------------------
 load_spx_data = function() {
   files = list.files(path="SPX/", pattern=NULL, all.files=FALSE, full.names=TRUE) %>% sort()
   
   df = read.csv2(file="SPX/DAT_NT_SPXUSD_T_LAST_202301.csv", header=FALSE) %>%
     dplyr::mutate(V1 = as.POSIXct(strptime(V1, format="%Y%m%d %H%M%S"), tz="UTC")) %>%
-    dplyr::mutate(V2 = as.numeric(V2)) %>% 
+    dplyr::mutate(V2 = log(as.numeric(V2))) %>% 
     dplyr::select(V1, V2)
   
   for (file in files[2:length(files)]) {
     spx = read.csv2(file=file, header=FALSE) %>%
       dplyr::mutate(V1 = as.POSIXct(strptime(V1, format="%Y%m%d %H%M%S"), tz="UTC")) %>%
-      dplyr::mutate(V2 = as.numeric(V2)) %>% 
+      dplyr::mutate(V2 = log(as.numeric(V2))) %>% 
       dplyr::select(V1, V2)
     df = rbind(df, spx)
   }
@@ -343,38 +302,7 @@ load_spx_data = function() {
   return(df)
 }
   
-spx = df = read.csv2(file="SPX/DAT_NT_SPXUSD_T_LAST_202309.csv", header=FALSE) %>%
-  dplyr::mutate(V1 = as.POSIXct(strptime(V1, format="%Y%m%d %H%M%S"), tz="UTC")) %>%
-  dplyr::mutate(V2 = as.numeric(V2)) %>% 
-  dplyr::select(V1, V2) %>% 
-  magrittr::set_colnames(c("time", "spx"))
-
-as.POSIXct(spx$time, origin="1970-01-01") %>% diff() %>% mean()
-as.POSIXct(spx$time, origin="1970-01-01") %>% diff() %>% ifelse(. > 500, 1, .) %>% as.double %>% mean()
-rownames(spx) = spx_data$time
-spx$time = NULL
-get_ms_noise(spx)
-
-# Lobster
-ticker = "MSFT"
-lobster_data = get_lobster_data(ticker) %>% 
-  mutate(time = round_date(time, unit="second")) %>% 
-  dplyr::filter(type==4 | type==5) %>% 
-  distinct(time, .keep_all=TRUE) %>% 
-  mutate(price = price) %>% 
-  dplyr::select(time, price)
-
-as.POSIXct(lobster_data$time, origin="1970-01-01") %>% diff() %>% mean()
-nrow(lobster_data)
-get_ms_noise(lobster_data$price)
-((lobster_data[nrow(lobster_data), 2] - lobster_data[1, 2]) / lobster_data[1,2]) * 100
-
-plot(lobster_data$time, lobster_data$price, main=ticker)
-
-# Get stock data
-# https://www.investing.com/equities/most-active-stocks
-tickers = c("TSLA", "T", "AAPL", "PLTR", "AMD", "BAC", "AMZN", "NVDA", "PFE", "INTC")
-
+### Stock data -----------------------------------------------------------------
 get_polygon_df = function(tickers, multiplier="1", interval="minute", from_date="2023-09-03", to_date="2023-09-29") {
   df = FALSE
   for (ticker in tickers) {
@@ -485,6 +413,7 @@ get_refresh_avg_time = function(stock_df, return_matrix=TRUE) {
   }
 }
 
+### Simulation Study -----------------------------------------------------------
 transform_results <- function(lambda_level, simulation_result) {
   
   res <- matrix(rep(0,5*6),nrow = 5, ncol = 6)
@@ -586,26 +515,3 @@ results_to_table <- function(simulation_result){
   clipr::write_clip(latex_table)
   
 }
-
-stock_df = get_polygon_df(tickers)
-times = get_stock_avg_time(stock_df)
-
-refresh_stock = get_stock_refresh(stock_df)
-info = get_refresh_avg_time(stock_df)
-
-log_stock_df = stock_df
-log_stock_df[2:ncol(log_stock_df)] = log(stock_df[2:ncol(stock_df)])
-
-info = get_refresh_avg_time(log_stock_df)
-
-# Save and load
-save(data, file="log_forex_list.Rdata")
-save(refresh_data, file="log_forex_refresh.RData")
-save(test, file="matrices.RData")
-load(file="log_forex_refresh.RData")
-load(file="log_forex_list.RData")
-
-
-# Save and load
-save(data, file="forex_df.Rdata")
-save(refresh_data, file="forex_refresh_df.RData")
