@@ -566,6 +566,14 @@ tic()
 TEST <- simulation(lambda1 = 30, lambda2 = 60)
 toc()
 
+res <- rep(0,1000)
+for (i in 1:1000) {
+  res[i] <- simulation_result[[5]][[i]] %>% .$n
+}
+n_list <- append(n_list,list(mean(res)))
+
+
+
 ### Simulation ----------------------------------------------------------------
 set.seed(123)
 lambdas <- list(c(0,0), c(1,2), c(3,5), c(5,10), c(10,20))

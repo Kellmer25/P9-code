@@ -7,6 +7,9 @@ suppressMessages({
   library(xts)
   library(highfrequency)
   library(kableExtra)
+  library(cowplot)
+  library(plotly)
+  library(ggpubr)
 })
 
 ### Functions -----------------------------------------------------------------
@@ -369,7 +372,7 @@ results_to_table <- function(simulation_result){
       mrmse = 0,
       mmae = 0, 
       .before = 1
-      ) %>% 
+    ) %>% 
     dplyr::add_row(
       Noise = "0",
       bias = 0,
@@ -432,6 +435,99 @@ results_to_table <- function(simulation_result){
   clipr::write_clip(latex_table)
   
 }
+
+twobytwo <- function(lambda_level, simulation_result) {
+  mrc_list <- list(
+    "mrc_11" = c(1,1),
+    "mrc_12" = c(1,2),
+    "mrc_21" = c(2,1),
+    "mrc_22" = c(2,2)
+  )
+  
+  rc_list <- list(
+    "rc_11" = c(1,1),
+    "rc_12" = c(1,2),
+    "rc_21" = c(2,1),
+    "rc_22" = c(2,2)
+  )
+  
+  mrc_res <- lapply(mrc_list, function(vec, lambda_level) {
+    res <- rep(0, 1000)
+    for (i in 1:1000) {
+      res[i] <-
+        simulation_result[[lambda_level]][[i]][['TrueCov']][vec[1], vec[2]] -
+        simulation_result[[lambda_level]][[i]][['MRC']][['MS0']][vec[1],vec[2]]
+    }
+    return(res)
+    
+  }, lambda_level = lambda_level)
+  
+  rc_res <- lapply(rc_list, function(vec, lambda_level) {
+    res <- rep(0, 1000)
+    for (i in 1:1000) {
+      res[i] <-
+        simulation_result[[lambda_level]][[i]][['TrueCov']][vec[1], vec[2]] -
+        simulation_result[[lambda_level]][[i]][['RC']][['MS0']][vec[1],vec[2]]
+    }
+    return(res)
+    
+  }, lambda_level = lambda_level)
+  
+  figs <- lapply(1:4, function(number) {
+    x_bound <- 0.035
+    binsw <- 0.003
+    if (number %in% c(2,3)) {
+      x_bound <- 0.25
+      binsw <- 0.02
+    }
+    entry <- switch(number, 11, 12, 21, 22)
+    
+    color1 <- "#ea5545"
+    color2 <- "#27aeef"
+    
+    df <- data.frame(
+      "MRC" = mrc_res[[number]],
+      "RC" = rc_res[[number]]
+    ) %>% tidyr::gather(key = 'Estimator', value = result)
+    
+    fig <- ggplot(df, aes(x = result, color=Estimator, fill = Estimator)) +
+      geom_histogram(alpha=0.4, position="identity", binwidth = binsw) +
+      xlim(-x_bound,x_bound) +
+      scale_color_manual(values=c(color1, color2)) +
+      scale_fill_manual(values=c(color1, color2)) + 
+      geom_vline(
+        aes(xintercept=quantile(mrc_res[[number]], probs = 0.25)), 
+        color=color1,
+        linetype="dashed"
+      ) +
+      geom_vline(
+        aes(xintercept=quantile(mrc_res[[number]], probs = 0.75)), 
+        color=color1,
+        linetype="dashed"
+      ) +
+      geom_vline(
+        aes(xintercept=quantile(rc_res[[number]], probs = 0.25)), 
+        color= color2,
+        linetype="dashed"
+      ) +
+      geom_vline(
+        aes(xintercept=quantile(rc_res[[number]], probs = 0.75)), 
+        color = color2,
+        linetype="dashed"
+      ) + xlab("Bias") + ylab("Count") +
+      ggtitle(bquote(Bias ~ of ~ MRC[.(entry)] ~ and ~ RC[.(entry)])) +
+      scale_y_continuous(expand =  expansion(mult = c(0, 0.05)))
+    
+    return(fig)
+  })
+  final_plot <- ggarrange(
+    figs[[1]],figs[[2]],figs[[3]],figs[[4]], 
+    ncol=2, nrow=2, common.legend = TRUE, legend="bottom"
+  )
+  final_plot
+}
+
+twobytwo(lambda_level = 5, simulation_result = simulation_result)
 
 stock_df = get_polygon_df(tickers)
 times = get_stock_avg_time(stock_df)
