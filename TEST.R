@@ -2,6 +2,7 @@ library(ggplot2)
 library(dplyr)
 library(highfrequency)
 library(data.table)
+library(glue)
 
 obs_times = function(N=23400, lambdas=c(3,6), df=FALSE) {
   len = length(lambdas)
@@ -32,11 +33,7 @@ refresh_times = function(df) {
   observed = rep(FALSE, ncol(df))
   times = c(max(df[1, ]))
   
-  
-  
 }
-
-
 
 set.seed(12311)
 df = obs_times(N=10, lambdas=c(1,2,3), df=TRUE)
@@ -44,4 +41,7 @@ df = obs_times(N=10, lambdas=c(1,2,3), df=TRUE)
 ggplot(df) + 
   geom_point(aes(x=lambda1, y=1), col="blue") + 
   geom_point(aes(x=lambda2, y=2), col="red") + 
-  geom_point(aes(x=lambda3, y=3), col="green")
+  geom_point(aes(x=lambda3, y=3), col="green") + 
+  scale_x_continuous(breaks=) + 
+  labs(x="Time", y = "Asset")
+
