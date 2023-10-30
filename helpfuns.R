@@ -6,7 +6,11 @@ suppressMessages({
   library(lubridate)
   library(xts)
   library(highfrequency)
+<<<<<<< Updated upstream
   library(kableExtra)
+=======
+  library(ggplot2)
+>>>>>>> Stashed changes
 })
 
 ### Functions -----------------------------------------------------------------
@@ -35,11 +39,9 @@ get_lobster_data = function(ticker) {
   message = read.csv(paste0("Message/", ticker, "_2012-06-21_34200000_57600000_message_1.csv")) %>%
     as.data.frame() %>%
     magrittr::set_colnames(c("time", "type", "order_id", "size", "price", "direction"))%>%
-    dplyr::mutate(
-      ms = round(time - 34200, 2), .after=1
-    ) %>% dplyr::mutate(
-      time = as.POSIXct(time, origin="2012-10-06 00:00:00"),
-      price = round(price / 10000, 2)
+    dplyr::mutate(ms = round(time - 34200, 2), .after=1) %>% 
+    dplyr::mutate(time = as.POSIXct(time, origin="2012-10-06 00:00:00"),
+                  price = round(price / 10000, 2)
     )
   orderbook = read.csv(paste0("Orderbook/", ticker, "_2012-06-21_34200000_57600000_orderbook_1.csv"), header=FALSE) %>%
     as.data.frame() %>%
@@ -77,6 +79,60 @@ get_polygon_time_series = function(ticker, multiplier="1", interval="minute", fr
     magrittr::set_colnames(c("timestamp"))
   stock_df = merge(stock_df, na_df, by="timestamp", all=TRUE)[1:2]
   return(stock_df)
+}
+
+get_forex_data_dfs = function(from_month="01", to_month="09") {
+  paths = list.files(path="Forex/", pattern=NULL, all.files=FALSE, full.names=TRUE)
+  months = paste0("20230", seq(from_month, to_month))
+  data = list()
+  counter = 1
+  len = length(paths)
+  for (folder in paths) {
+    name = strsplit(folder, "/")[[1]][2]
+    cat("Fetching: ", name, " (", counter, "/", len, ")", sep="", end="\n")
+    files = c()
+    csv_paths = list.files(path=folder, pattern=".csv", all.files=FALSE, full.names=TRUE)
+    csv_paths = sort(csv_paths)
+    matches = c()
+    for (i in 1:length(months)) {
+      matches[i] = grepl(months[i], csv_paths)[i]
+    }
+    if (length(months) < length(csv_paths)) {
+      matches[(length(months)+1):length(csv_paths)] = FALSE
+    }
+    files = csv_paths[matches]
+    asset = matrix(ncol=2) %>% 
+      as.data.frame() %>% 
+      magrittr::set_colnames(c("time", {{name}}))
+    
+    for (file in files) {
+      df = read.csv2(file=file, header=FALSE) %>%
+        dplyr::mutate(V1 = as.POSIXct(strptime(V1, format="%Y%m%d %H%M%S"), tz="UTC")) %>%
+        dplyr::mutate(V2 = log(as.numeric(V2))) %>% 
+        magrittr::set_colnames(c("time", {{name}})) %>% 
+        dplyr::select(time, {{name}})
+      asset = rbind(asset, df)
+    }
+    asset$time = as.POSIXct(asset$time, tz="utc", origin="1970-01-01")
+    data[[name]] = asset %>% na.omit()
+    counter = counter + 1
+  }
+  return(data)
+}
+
+get_empirical_data = function(data) {
+  assets = names(data)
+  diff_list = list()
+  acf_list = list()
+  for (asset in assets) {
+    asset_df = data[[asset]]
+    times = asset_df$time[2:nrow(asset_df)]
+    diffs = as.double(diff(asset_df$time))
+    diff_df = data.frame(times, diffs)
+    diff_list[[asset]] = diff_df
+    acf_list[[asset]] = acf(asset_df[[asset]])$acf
+  }
+  return(list("diff"=diff_list, "acf"=acf_list))
 }
 
 get_forex_data = function(from_month="01", to_month="09") {
@@ -182,17 +238,24 @@ get_ms_noise = function(refresh_data) {
   return(res)
 }
 
-get_comp_df = function(data) {
+get_comp_df = function(data, return_matrices=TRUE, return_diff=TRUE) {
   times = get_avg_time(data) %>% arrange(avg)
   assets = rownames(times) %>% rev()
   info = matrix(ncol=5, nrow=length(assets)-1) 
+  matrices = list()
+  diff_list = list()
   
   refresh_data = refresh_list(data)
   info[1,1] = assets[1]
   info[1,2] = ncol(refresh_data)
   info[1,3] = nrow(refresh_data)
   info[1,4] = mean(as.numeric(diff(as.POSIXct(rownames(refresh_data)))))
-  info[1,5] = get_ms_noise(refresh_data) %>% diag() %>% mean() %>% format(scientific = TRUE)
+  info[1,5] = get_ms_noise(refresh_data) %>% diag() %>% norm(type="2") %>% format(scientific = TRUE)
+  matrices[[info[1,1]]] = get_ms_noise(refresh_data)
+  
+  time = as.POSIXct(rownames(refresh_data))
+  diff_data = diff(as.POSIXct(rownames(refresh_data)))
+  diff_list[[info[1,1]]] = data.frame(time, diff_data)
   
   data_res = data
   counter = 2
@@ -204,21 +267,112 @@ get_comp_df = function(data) {
     info[counter,2] = ncol(refresh_data)
     info[counter,3] = nrow(refresh_data)
     info[counter,4] = mean(as.numeric(diff(as.POSIXct(rownames(refresh_data)))))
-    info[counter,5] = get_ms_noise(refresh_data) %>% diag() %>% mean() %>% format(scientific = TRUE)
+    info[counter,5] = get_ms_noise(refresh_data) %>% diag() %>% norm(type="2") %>% format(scientific = TRUE)
+    matrices[[info[counter,1]]] = get_ms_noise(refresh_data)
+    
+    time = as.POSIXct(rownames(refresh_data))
+    diff_data = diff(as.POSIXct(rownames(refresh_data)))
+    diff_list[[info[counter,1]]] = data.frame(time, diff_data)
     counter = counter + 1
   }
   info = info %>% as.data.frame() %>% 
     magrittr::set_colnames(c("least", "nr_assets", "obs", "avg", "ms"))
+  if (isTRUE(return_matrices)) {
+    return(list("info"=info, "matrices"=matrices, "diff"=diff))
+  }
   return(info)
 }
+
+# Initial data analysis
+data = get_forex_data_dfs()
+info = get_empirical_data(data)
+
+diff_data = info[["diff"]]
+acf_data = info[["acf"]]
+
+jpy_data = info[["diff"]][["EURJPY"]]
+
+jpy_data %>% filter(diffs > 60) %>% View()
+View(jpy_data[7180572:(7180572+2000), ])
+
+ggplot(jpy_data[1:8000, ], aes(x=times, y=diffs)) + 
+  geom_line()
+
 
 # Get data and times
 data = get_forex_data()
 times = get_avg_time(data) %>% arrange(avg)
 
-
 refresh_data = refresh_list(data)
 info = get_comp_df(data)
+
+test = get_comp_df(data)
+matrices = test[["matrices"]]
+
+for (matrix in matrices) {
+  matrix %>% diag() %>% norm(type="2") %>% print()
+}
+
+# MS EURJPY
+tester = matrix(ncol=2) %>% as.data.frame()
+for (item in data$EURJPY) {
+  item = item %>% 
+    as.data.frame() %>% 
+    magrittr::set_colnames(c("V2")) %>% 
+    mutate(V1 = as.POSIXct(index(item), origin="1970-01-01", tz="utc"), .before=1)
+  tester = rbind(tester, item)
+}
+tester = tester %>% na.omit()
+get_ms_noise(tester$V2)
+
+
+# SPX data
+load_spx_data = function() {
+  files = list.files(path="SPX/", pattern=NULL, all.files=FALSE, full.names=TRUE) %>% sort()
+  
+  df = read.csv2(file="SPX/DAT_NT_SPXUSD_T_LAST_202301.csv", header=FALSE) %>%
+    dplyr::mutate(V1 = as.POSIXct(strptime(V1, format="%Y%m%d %H%M%S"), tz="UTC")) %>%
+    dplyr::mutate(V2 = as.numeric(V2)) %>% 
+    dplyr::select(V1, V2)
+  
+  for (file in files[2:length(files)]) {
+    spx = read.csv2(file=file, header=FALSE) %>%
+      dplyr::mutate(V1 = as.POSIXct(strptime(V1, format="%Y%m%d %H%M%S"), tz="UTC")) %>%
+      dplyr::mutate(V2 = as.numeric(V2)) %>% 
+      dplyr::select(V1, V2)
+    df = rbind(df, spx)
+  }
+  colnames(df) = c("time", "spx")
+  return(df)
+}
+  
+spx = df = read.csv2(file="SPX/DAT_NT_SPXUSD_T_LAST_202309.csv", header=FALSE) %>%
+  dplyr::mutate(V1 = as.POSIXct(strptime(V1, format="%Y%m%d %H%M%S"), tz="UTC")) %>%
+  dplyr::mutate(V2 = as.numeric(V2)) %>% 
+  dplyr::select(V1, V2) %>% 
+  magrittr::set_colnames(c("time", "spx"))
+
+as.POSIXct(spx$time, origin="1970-01-01") %>% diff() %>% mean()
+as.POSIXct(spx$time, origin="1970-01-01") %>% diff() %>% ifelse(. > 500, 1, .) %>% as.double %>% mean()
+rownames(spx) = spx_data$time
+spx$time = NULL
+get_ms_noise(spx)
+
+# Lobster
+ticker = "MSFT"
+lobster_data = get_lobster_data(ticker) %>% 
+  mutate(time = round_date(time, unit="second")) %>% 
+  dplyr::filter(type==4 | type==5) %>% 
+  distinct(time, .keep_all=TRUE) %>% 
+  mutate(price = price) %>% 
+  dplyr::select(time, price)
+
+as.POSIXct(lobster_data$time, origin="1970-01-01") %>% diff() %>% mean()
+nrow(lobster_data)
+get_ms_noise(lobster_data$price)
+((lobster_data[nrow(lobster_data), 2] - lobster_data[1, 2]) / lobster_data[1,2]) * 100
+
+plot(lobster_data$time, lobster_data$price, main=ticker)
 
 
 # Get stock data
@@ -295,7 +449,7 @@ get_stock_refresh = function(stock_df) {
   return(times)
 }
 
-get_refresh_avg_time = function(stock_df) {
+get_refresh_avg_time = function(stock_df, return_matrix=TRUE) {
   times = get_stock_avg_time(stock_df)
   tickers = times %>% rownames(.) %>% rev()
   info = matrix(ncol=6, nrow=length(tickers)-1)
@@ -308,7 +462,7 @@ get_refresh_avg_time = function(stock_df) {
   info[1, 3] = nrow(refresh_data)
   info[1, 4] = mean(as.numeric(diff(as.POSIXct(rownames(refresh_data)))))
   info[1, 5] = rownames(refresh_data) %>% as.POSIXct() %>% diff() %>% ifelse(. > 120, 1, .) %>% as.numeric %>% mean()
-  info[1, 6] = get_ms_noise(refresh_data) %>% diag() %>% mean() %>% format(scientific = TRUE)
+  info[1, 6] = get_ms_noise(refresh_data) %>% diag() %>% norm(type="2") %>% format(scientific = TRUE)
   
   data_res = stock_df
   counter = 2
@@ -323,12 +477,16 @@ get_refresh_avg_time = function(stock_df) {
     info[counter, 3] = nrow(refresh_data)
     info[counter, 4] = mean(as.numeric(diff(as.POSIXct(rownames(refresh_data)))))
     info[counter, 5] = rownames(refresh_data) %>% as.POSIXct() %>% diff() %>% ifelse(. > 120, 1, .) %>% as.numeric %>% mean()
-    info[counter, 6] = get_ms_noise(refresh_data) %>% diag() %>% mean() %>% format(scientific = TRUE)
+    info[counter, 6] = get_ms_noise(refresh_data) %>% diag() %>% norm(type="2") %>% format(scientific = TRUE)
     counter = counter + 1
   }
   info = as.data.frame(info) %>%
     magrittr::set_colnames(c("least", "nr_assets", "obs", "avg", "avg_trading", "ms"))
-  return(info)
+  if (isTRUE(return_matrix)) {
+    return(info, matrices)
+  } else {
+    return(info)
+  }
 }
 
 transform_results <- function(lambda_level, simulation_result) {
@@ -447,13 +605,11 @@ info = get_refresh_avg_time(log_stock_df)
 # Save and load
 save(data, file="log_forex_list.Rdata")
 save(refresh_data, file="log_forex_refresh.RData")
+save(test, file="matrices.RData")
+load(file="log_forex_refresh.RData")
+load(file="log_forex_list.RData")
+
 
 # Save and load
-save(data, file="forex_list.Rdata")
-save(refresh_data, file="forex_refresh.RData")
-
-# Save and load
-save(data, file="100_logforex_list.Rdata")
-save(refresh_data, file="100_logforex_refresh.RData")
-
-
+save(data, file="forex_df.Rdata")
+save(refresh_data, file="forex_refresh_df.RData")
