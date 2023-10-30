@@ -2,6 +2,9 @@
 .Rhistory
 .Rapp.history
 
+# Ignore golder
+Ignore/	
+
 # Session Data files
 .RData
 .RDataTmp
