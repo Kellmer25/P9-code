@@ -342,7 +342,7 @@ transform_results <- function(lambda_level, simulation_result) {
 
 results_to_table <- function(simulation_result){
   results <- lapply(
-    1:4, 
+    1:5, 
     transform_results, 
     simulation_result = simulation_result
   )
@@ -399,9 +399,19 @@ results_to_table <- function(simulation_result){
       mrmse = 0,
       mmae = 0, 
       .before = 19
+    ) %>% 
+    dplyr::add_row(
+      Noise = "0",
+      bias = 0,
+      rmse = 0,
+      mae = 0,
+      mbias = 0,
+      mrmse = 0,
+      mmae = 0, 
+      .before = 25
     )
   
-  latex_table <- kbl(
+  latex_table <- kableExtra::kbl(
     rbound_res, 
     longtable = T, 
     booktabs = T,
@@ -409,15 +419,15 @@ results_to_table <- function(simulation_result){
     linesep = c("", "", "", "", "", paste0("\\addlinespace")),
     caption = "Longtable"
   ) %>%
-    add_header_above(c(" ", "RC" = 3, "MRC" = 3)) %>%
-    kable_styling(
+    kableExtra::add_header_above(c(" ", "RC" = 3, "MRC" = 3)) %>%
+    kableExtra::kable_styling(
       latex_options = c(
         "repeat_header", 
         "striped"),
-      stripe_index = c(1:6, 13:18),
+      stripe_index = c(1:6, 13:18, 25:30),
       position = "center"
     ) %>%
-    column_spec(2:7, width = "2cm")
+    kableExtra::column_spec(2:7, width = "2cm")
   
   clipr::write_clip(latex_table)
   
