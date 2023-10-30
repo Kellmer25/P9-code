@@ -6,11 +6,8 @@ suppressMessages({
   library(lubridate)
   library(xts)
   library(highfrequency)
-<<<<<<< Updated upstream
   library(kableExtra)
-=======
   library(ggplot2)
->>>>>>> Stashed changes
 })
 
 ### Functions -----------------------------------------------------------------
@@ -373,7 +370,6 @@ get_ms_noise(lobster_data$price)
 ((lobster_data[nrow(lobster_data), 2] - lobster_data[1, 2]) / lobster_data[1,2]) * 100
 
 plot(lobster_data$time, lobster_data$price, main=ticker)
-
 
 # Get stock data
 # https://www.investing.com/equities/most-active-stocks
