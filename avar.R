@@ -423,7 +423,10 @@ update_sampling_freq <- function(Y, lambdas, poi = NULL) {
 }
 
 refreshData <- function(Y_mat) {
-  update_logic <- matrix(rep(FALSE, nrow(Y_mat)*2), nrow = nrow(Y_mat))
+  update_logic <- matrix(
+    rep(FALSE, nrow(Y_mat)*ncol(Y_mat)),
+    nrow = nrow(Y_mat), ncol = ncol(Y_mat)
+  )
   
   for (i in 2:nrow(Y_mat)) {
     for (j in 1:ncol(Y_mat)) {
@@ -436,16 +439,16 @@ refreshData <- function(Y_mat) {
     }
   }
   
-  indexes_to_keep <- sapply(rowSums(update_logic), function(number) {
-    if (number == 2) {return(T)} else {return(F)}
-  })
+  indexes_to_keep <- sapply(rowSums(update_logic), function(number,Y_mat) {
+    if (number == ncol(Y_mat)) {return(T)} else {return(F)}
+  }, Y_mat = Y_mat)
   
   res <- Y_mat[indexes_to_keep,]
   
   return(res)
 }
 
-simulation <- function(lambda1, lambda2, EfficientPrice){
+simulation <- function(lambdas, EfficientPrice){
   gamma2 <- list(
     'MS1' = 10^(-3),
     'MS2' = 10^(-5), 
@@ -472,18 +475,21 @@ simulation <- function(lambda1, lambda2, EfficientPrice){
   
   #Update sampling frequency of the three prices
   poi_mat <- matrix( #Creating poisson process matrix to drive AS
-    c(
-      cumsum(rexp(2*86400, 1/lambda1)),
-      cumsum(rexp(2*86400, 1/lambda2))
-    ),
-    ncol = 2
+    nrow = 2*86400,
+    cumsum(rexp(2*86400, 1/lambdas[[1]]))
   )
+  for (i in 2:length(lambdas)) {
+    poi_mat <- cbind(
+      poi_mat,
+      cumsum(rexp(2*86400, 1/lambdas[[i]]))
+    )
+  }
   
-  if (lambda1 != 0 & lambda2 != 0){
+  if (all(lambdas != 0)){
     YwNAS <- lapply(
       YwN, 
       update_sampling_freq, 
-      lambdas = list(lambda1, lambda2),
+      lambdas = as.list(lambdas),
       poi = poi_mat
     ) %>% 
       lapply(
@@ -503,12 +509,12 @@ simulation <- function(lambda1, lambda2, EfficientPrice){
   
   res <- matrix(
     c(
-      unname(unlist(lapply(RC, RMSE, TrueCov))),
-      unname(unlist(lapply(RC, MAE, TrueCov))),
-      unname(unlist(lapply(RC, BIAS, TrueCov))),
-      unname(unlist(lapply(MRC, RMSE, TrueCov))),
-      unname(unlist(lapply(MRC, MAE, TrueCov))),
-      unname(unlist(lapply(MRC, BIAS, TrueCov)))
+      unname(unlist(lapply(RC, RMSE, true_cov = TrueCov))),
+      unname(unlist(lapply(RC, MAE, true_cov = TrueCov))),
+      unname(unlist(lapply(RC, BIAS, true_cov = TrueCov))),
+      unname(unlist(lapply(MRC, RMSE, true_cov = TrueCov))),
+      unname(unlist(lapply(MRC, MAE, true_cov = TrueCov))),
+      unname(unlist(lapply(MRC, BIAS, true_cov = TrueCov)))
     ),
     ncol = 6
   ) %>% magrittr::set_colnames(
@@ -519,7 +525,7 @@ simulation <- function(lambda1, lambda2, EfficientPrice){
   
   return(list(
     "Res" = res, 
-    "lambdas" = c(lambda1, lambda2), 
+    "lambdas" = lambdas, 
     "MRC" = MRC, 
     "RC" = RC,
     "TrueCov" = TrueCov,
@@ -568,20 +574,20 @@ toc()
 
 ### Simulation ----------------------------------------------------------------
 set.seed(123)
-lambdas <- list(c(0,0), c(1,2), c(3,5), c(5,10), c(10,20))
-tic()
+lambdas <- list(c(rep(1,9),2), c(rep(3,9),5), c(rep(5,9),10), c(rep(10,9),20))
 EffPrice <- lapply(
-  1:1, 
+  1:2, 
   simulate_prices,
-  n_prices = 2, Tend = 1, N = 86400, gamma2 = 0
+  n_prices = 10, Tend = 1, N = 86400, gamma2 = 0
 )
+tic()
 simulation_result <- lapply(
   X = lambdas,
   FUN = function(lambdas, EfficientPrice) {
     res <- lapply(
       X = EfficientPrice, 
       FUN = simulation,
-      lambda1 = lambdas[1], lambda2 = lambdas[2]
+      lambdas = lambdas
     )
     return(res)
   },
@@ -589,6 +595,8 @@ simulation_result <- lapply(
 )
 # saveRDS(simulation_result, "simulation_result")
 toc()
+
+
 
 
 
