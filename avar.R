@@ -294,7 +294,6 @@ RC_est <- function(Y) {
   if (is.null(nrow(Y)) && length(Y)!=0) {
     Y <- matrix(Y, ncol = 1)
   }
-  
   n <- nrow(Y) - 1
   d <- ncol(Y)
   
@@ -315,7 +314,7 @@ RMSE <- function(true_cov, est) {
 }
 
 BIAS <- function(true_cov, est) {
-  return(sum(true_cov - est))
+  return(sum(est - true_cov))
 }
 
 rolling_window_estimation <- function(days, nprday, n_prices, gamma2) {

@@ -550,8 +550,7 @@ twobytwo <- function(lambda_level, simulation_result) {
     for (i in 1:1000) {
       res[i] <-
         simulation_result[[lambda_level]][[i]][['RC']][['MS0']][vec[1],vec[2]] -
-        simulation_result[[lambda_level]][[i]][['TrueCov']][vec[1], vec[2]]
-        
+        simulation_result[[lambda_level]][[i]][['TrueCov']][vec[1], vec[2]] 
     }
     return(res)
     
@@ -648,3 +647,12 @@ save(refresh_data, file="forex_refresh.RData")
 save(data, file="100_logforex_list.Rdata")
 save(refresh_data, file="100_logforex_refresh.RData")
 
+test_fun <- function(lambda_level) {
+  res <- matrix(rep(0,100),c(10,10))
+  for (i in 1:1000) {
+    res <- res +
+      simulation_result[[lambda_level]][[i]][['RC']][['MS0']] -
+      simulation_result[[lambda_level]][[i]][['TrueCov']]
+  }
+  return(res)
+}
