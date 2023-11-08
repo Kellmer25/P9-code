@@ -10,6 +10,7 @@ suppressMessages({
   library(cowplot)
   library(plotly)
   library(ggpubr)
+  library(ggplot2)
 })
 
 ### Functions -----------------------------------------------------------------
@@ -29,20 +30,29 @@ Get_Eikon <- function(filename,Date = c("2023-08-25")){
       Timestamp = as.POSIXct(Timestamp, format = "%d-%b-%Y %H:%M:%OS")
     ) %>% 
     dplyr::filter(lubridate::date(Timestamp) %in% Dates)
-  
   return(Data)
 }
 
+get_ms_noise = function(refresh_data) {
+  diff_y = diff(as.matrix(refresh_data))
+  n = nrow(diff_y)
+  res = 0
+  for (i in 1:n) {
+    res = res + diff_y[i,] %*% t(diff_y[i,])
+  }
+  res = res / (2*n)
+  return(res)
+}
+
+### Lobster data ---------------------------------------------------------------
 get_lobster_data = function(ticker) {
   ticker = toupper(ticker)
   message = read.csv(paste0("Message/", ticker, "_2012-06-21_34200000_57600000_message_1.csv")) %>%
     as.data.frame() %>%
     magrittr::set_colnames(c("time", "type", "order_id", "size", "price", "direction"))%>%
-    dplyr::mutate(
-      ms = round(time - 34200, 2), .after=1
-    ) %>% dplyr::mutate(
-      time = as.POSIXct(time, origin="2012-10-06 00:00:00"),
-      price = round(price / 10000, 2)
+    dplyr::mutate(ms = round(time - 34200, 2), .after=1) %>% 
+    dplyr::mutate(time = as.POSIXct(time, origin="2012-10-06 00:00:00"),
+                  price = round(price / 10000, 2)
     )
   orderbook = read.csv(paste0("Orderbook/", ticker, "_2012-06-21_34200000_57600000_orderbook_1.csv"), header=FALSE) %>%
     as.data.frame() %>%
@@ -58,6 +68,7 @@ get_lobster_data = function(ticker) {
   return(message) 
 }
 
+### Polygon --------------------------------------------------------------------
 get_polygon_time_series = function(ticker, multiplier="1", interval="minute", from_date="2023-09-03", to_date="2023-09-29") {
   ticker = toupper(ticker)
   api_key = paste0(
@@ -80,6 +91,46 @@ get_polygon_time_series = function(ticker, multiplier="1", interval="minute", fr
     magrittr::set_colnames(c("timestamp"))
   stock_df = merge(stock_df, na_df, by="timestamp", all=TRUE)[1:2]
   return(stock_df)
+}
+
+### Forex data -----------------------------------------------------------------
+get_forex_data_dfs = function(from_month="01", to_month="09") {
+  paths = list.files(path="Forex/", pattern=NULL, all.files=FALSE, full.names=TRUE)
+  months = paste0("20230", seq(from_month, to_month))
+  data = list()
+  counter = 1
+  len = length(paths)
+  for (folder in paths) {
+    name = strsplit(folder, "/")[[1]][2]
+    cat("Fetching: ", name, " (", counter, "/", len, ")", sep="", end="\n")
+    files = c()
+    csv_paths = list.files(path=folder, pattern=".csv", all.files=FALSE, full.names=TRUE)
+    csv_paths = sort(csv_paths)
+    matches = c()
+    for (i in 1:length(months)) {
+      matches[i] = grepl(months[i], csv_paths)[i]
+    }
+    if (length(months) < length(csv_paths)) {
+      matches[(length(months)+1):length(csv_paths)] = FALSE
+    }
+    files = csv_paths[matches]
+    asset = matrix(ncol=2) %>% 
+      as.data.frame() %>% 
+      magrittr::set_colnames(c("time", {{name}}))
+    
+    for (file in files) {
+      df = read.csv2(file=file, header=FALSE) %>%
+        dplyr::mutate(V1 = as.POSIXct(strptime(V1, format="%Y%m%d %H%M%S"), tz="UTC")) %>%
+        dplyr::mutate(V2 = log(as.numeric(V2))) %>% 
+        magrittr::set_colnames(c("time", {{name}})) %>% 
+        dplyr::select(time, {{name}})
+      asset = rbind(asset, df)
+    }
+    asset$time = as.POSIXct(asset$time, tz="utc", origin="1970-01-01")
+    data[[name]] = asset %>% na.omit()
+    counter = counter + 1
+  }
+  return(data)
 }
 
 get_forex_data = function(from_month="01", to_month="09") {
@@ -123,6 +174,21 @@ get_forex_data = function(from_month="01", to_month="09") {
     counter = counter + 1
   }
   return(data)
+}
+
+get_empirical_data = function(data) {
+  assets = names(data)
+  diff_list = list()
+  acf_list = list()
+  for (asset in assets) {
+    asset_df = data[[asset]]
+    times = asset_df$time[2:nrow(asset_df)]
+    diffs = as.double(diff(asset_df$time))
+    diff_df = data.frame(times, diffs)
+    diff_list[[asset]] = diff_df
+    acf_list[[asset]] = acf(asset_df[[asset]])$acf
+  }
+  return(list("diff"=diff_list, "acf"=acf_list))
 }
 
 refresh_list = function(data) {
@@ -174,28 +240,24 @@ get_avg_time = function(data) {
   return(times)
 }
 
-get_ms_noise = function(refresh_data) {
-  diff_y = diff(as.matrix(refresh_data))
-  n = nrow(diff_y)
-  res = 0
-  for (i in 1:n) {
-    res = res + diff_y[i,] %*% t(diff_y[i,])
-  }
-  res = res / (2*n)
-  return(res)
-}
-
-get_comp_df = function(data) {
+get_comp_df = function(data, return_matrices=TRUE, return_diff=TRUE) {
   times = get_avg_time(data) %>% arrange(avg)
   assets = rownames(times) %>% rev()
   info = matrix(ncol=5, nrow=length(assets)-1) 
+  matrices = list()
+  diff_list = list()
   
   refresh_data = refresh_list(data)
   info[1,1] = assets[1]
   info[1,2] = ncol(refresh_data)
   info[1,3] = nrow(refresh_data)
   info[1,4] = mean(as.numeric(diff(as.POSIXct(rownames(refresh_data)))))
-  info[1,5] = get_ms_noise(refresh_data) %>% diag() %>% mean() %>% format(scientific = TRUE)
+  info[1,5] = get_ms_noise(refresh_data) %>% diag() %>% norm(type="2") %>% format(scientific = TRUE)
+  matrices[[info[1,1]]] = get_ms_noise(refresh_data)
+  
+  time = as.POSIXct(rownames(refresh_data))
+  diff_data = diff(as.POSIXct(rownames(refresh_data)))
+  diff_list[[info[1,1]]] = data.frame(time, diff_data)
   
   data_res = data
   counter = 2
@@ -207,27 +269,43 @@ get_comp_df = function(data) {
     info[counter,2] = ncol(refresh_data)
     info[counter,3] = nrow(refresh_data)
     info[counter,4] = mean(as.numeric(diff(as.POSIXct(rownames(refresh_data)))))
-    info[counter,5] = get_ms_noise(refresh_data) %>% diag() %>% mean() %>% format(scientific = TRUE)
+    info[counter,5] = get_ms_noise(refresh_data) %>% diag() %>% norm(type="2") %>% format(scientific = TRUE)
+    matrices[[info[counter,1]]] = get_ms_noise(refresh_data)
+    
+    time = as.POSIXct(rownames(refresh_data))
+    diff_data = diff(as.POSIXct(rownames(refresh_data)))
+    diff_list[[info[counter,1]]] = data.frame(time, diff_data)
     counter = counter + 1
   }
   info = info %>% as.data.frame() %>% 
     magrittr::set_colnames(c("least", "nr_assets", "obs", "avg", "ms"))
+  if (isTRUE(return_matrices)) {
+    return(list("info"=info, "matrices"=matrices, "diff"=diff))
+  }
   return(info)
 }
 
-# Get data and times
-data = get_forex_data()
-times = get_avg_time(data) %>% arrange(avg)
-
-
-refresh_data = refresh_list(data)
-info = get_comp_df(data)
-
-
-# Get stock data
-# https://www.investing.com/equities/most-active-stocks
-tickers = c("TSLA", "T", "AAPL", "PLTR", "AMD", "BAC", "AMZN", "NVDA", "PFE", "INTC")
-
+### SPX data -------------------------------------------------------------------
+load_spx_data = function() {
+  files = list.files(path="SPX/", pattern=NULL, all.files=FALSE, full.names=TRUE) %>% sort()
+  
+  df = read.csv2(file="SPX/DAT_NT_SPXUSD_T_LAST_202301.csv", header=FALSE) %>%
+    dplyr::mutate(V1 = as.POSIXct(strptime(V1, format="%Y%m%d %H%M%S"), tz="UTC")) %>%
+    dplyr::mutate(V2 = log(as.numeric(V2))) %>% 
+    dplyr::select(V1, V2)
+  
+  for (file in files[2:length(files)]) {
+    spx = read.csv2(file=file, header=FALSE) %>%
+      dplyr::mutate(V1 = as.POSIXct(strptime(V1, format="%Y%m%d %H%M%S"), tz="UTC")) %>%
+      dplyr::mutate(V2 = log(as.numeric(V2))) %>% 
+      dplyr::select(V1, V2)
+    df = rbind(df, spx)
+  }
+  colnames(df) = c("time", "spx")
+  return(df)
+}
+  
+### Stock data -----------------------------------------------------------------
 get_polygon_df = function(tickers, multiplier="1", interval="minute", from_date="2023-09-03", to_date="2023-09-29") {
   df = FALSE
   for (ticker in tickers) {
@@ -298,7 +376,7 @@ get_stock_refresh = function(stock_df) {
   return(times)
 }
 
-get_refresh_avg_time = function(stock_df) {
+get_refresh_avg_time = function(stock_df, return_matrix=TRUE) {
   times = get_stock_avg_time(stock_df)
   tickers = times %>% rownames(.) %>% rev()
   info = matrix(ncol=6, nrow=length(tickers)-1)
@@ -311,7 +389,7 @@ get_refresh_avg_time = function(stock_df) {
   info[1, 3] = nrow(refresh_data)
   info[1, 4] = mean(as.numeric(diff(as.POSIXct(rownames(refresh_data)))))
   info[1, 5] = rownames(refresh_data) %>% as.POSIXct() %>% diff() %>% ifelse(. > 120, 1, .) %>% as.numeric %>% mean()
-  info[1, 6] = get_ms_noise(refresh_data) %>% diag() %>% mean() %>% format(scientific = TRUE)
+  info[1, 6] = get_ms_noise(refresh_data) %>% diag() %>% norm(type="2") %>% format(scientific = TRUE)
   
   data_res = stock_df
   counter = 2
@@ -326,14 +404,19 @@ get_refresh_avg_time = function(stock_df) {
     info[counter, 3] = nrow(refresh_data)
     info[counter, 4] = mean(as.numeric(diff(as.POSIXct(rownames(refresh_data)))))
     info[counter, 5] = rownames(refresh_data) %>% as.POSIXct() %>% diff() %>% ifelse(. > 120, 1, .) %>% as.numeric %>% mean()
-    info[counter, 6] = get_ms_noise(refresh_data) %>% diag() %>% mean() %>% format(scientific = TRUE)
+    info[counter, 6] = get_ms_noise(refresh_data) %>% diag() %>% norm(type="2") %>% format(scientific = TRUE)
     counter = counter + 1
   }
   info = as.data.frame(info) %>%
     magrittr::set_colnames(c("least", "nr_assets", "obs", "avg", "avg_trading", "ms"))
-  return(info)
+  if (isTRUE(return_matrix)) {
+    return(info, matrices)
+  } else {
+    return(info)
+  }
 }
 
+### Simulation Study -----------------------------------------------------------
 transform_results <- function(lambda_level, simulation_result) {
   
   res <- matrix(rep(0,5*6),nrow = 5, ncol = 6)
@@ -455,8 +538,8 @@ twobytwo <- function(lambda_level, simulation_result) {
     res <- rep(0, 1000)
     for (i in 1:1000) {
       res[i] <-
-        simulation_result[[lambda_level]][[i]][['TrueCov']][vec[1], vec[2]] -
-        simulation_result[[lambda_level]][[i]][['MRC']][['MS0']][vec[1],vec[2]]
+        simulation_result[[lambda_level]][[i]][['MRC']][['MS0']][vec[1],vec[2]] -
+        simulation_result[[lambda_level]][[i]][['TrueCov']][vec[1],vec[2]]
     }
     return(res)
     
@@ -466,8 +549,9 @@ twobytwo <- function(lambda_level, simulation_result) {
     res <- rep(0, 1000)
     for (i in 1:1000) {
       res[i] <-
-        simulation_result[[lambda_level]][[i]][['TrueCov']][vec[1], vec[2]] -
-        simulation_result[[lambda_level]][[i]][['RC']][['MS0']][vec[1],vec[2]]
+        simulation_result[[lambda_level]][[i]][['RC']][['MS0']][vec[1],vec[2]] -
+        simulation_result[[lambda_level]][[i]][['TrueCov']][vec[1], vec[2]]
+        
     }
     return(res)
     
@@ -527,6 +611,10 @@ twobytwo <- function(lambda_level, simulation_result) {
   final_plot
 }
 
+twobytwo(lambda_level = 1, simulation_result = simulation_result)
+twobytwo(lambda_level = 2, simulation_result = simulation_result)
+twobytwo(lambda_level = 3, simulation_result = simulation_result)
+twobytwo(lambda_level = 4, simulation_result = simulation_result)
 twobytwo(lambda_level = 5, simulation_result = simulation_result)
 
 stock_df = get_polygon_df(tickers)
@@ -551,5 +639,4 @@ save(refresh_data, file="forex_refresh.RData")
 # Save and load
 save(data, file="100_logforex_list.Rdata")
 save(refresh_data, file="100_logforex_refresh.RData")
-
 

@@ -2,6 +2,10 @@
 .Rhistory
 .Rapp.history
 
+# Ignore folder
+Ignore/	
+P9-code.RProj
+
 # Session Data files
 .RData
 .RDataTmp
