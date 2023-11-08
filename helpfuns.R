@@ -611,6 +611,14 @@ twobytwo <- function(lambda_level, simulation_result) {
   final_plot
 }
 
+get_obs_number <- function(simulation_result, lambda_level) {
+  obs_n <- 0
+  for (i in 1:1000) {
+    obs_n <- obs_n + simulation_result[[lambda_level]][[i]]["n"]
+  }
+  return(obs_n/1000)
+}
+
 twobytwo(lambda_level = 1, simulation_result = simulation_result)
 twobytwo(lambda_level = 2, simulation_result = simulation_result)
 twobytwo(lambda_level = 3, simulation_result = simulation_result)
