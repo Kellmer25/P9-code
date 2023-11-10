@@ -437,7 +437,6 @@ refreshData <- function(Y_mat) {
       }
     }
   }
-  
   indexes_to_keep <- sapply(rowSums(update_logic), function(number,Y_mat) {
     if (number == ncol(Y_mat)) {return(T)} else {return(F)}
   }, Y_mat = Y_mat)
@@ -581,9 +580,9 @@ n_list <- append(n_list,list(mean(res)))
 
 ### Simulation ----------------------------------------------------------------
 set.seed(123)
-lambdas <- list(c(rep(1,9),2), c(rep(3,9),5), c(rep(5,9),10), c(rep(10,9),20))
+lambdas <- list(c(rep(10,9),20))
 EffPrice <- lapply(
-  1:2, 
+  1:1, 
   simulate_prices,
   n_prices = 10, Tend = 1, N = 86400, gamma2 = 0
 )
@@ -603,6 +602,17 @@ simulation_result <- lapply(
 # saveRDS(simulation_result, "simulation_result")
 toc()
 
+indexes_to_keep
+test <- data.frame("indexes_to_keep" = indexes_to_keep) 
+
+
+numbers <- which(indexes_to_keep == T)
+
+res <- rep(0,length(numbers)-1)
+for (i in 1:(length(numbers)-1)){
+  res[i] <- sum(indexes_to_keep[numbers[i]:(numbers[i+1]-1)]==0)
+}
+indexes_to_keep[numbers[i]:numbers[i+1]]
 
 
 
