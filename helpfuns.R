@@ -557,12 +557,12 @@ twobytwo <- function(lambda_level, simulation_result) {
   }, lambda_level = lambda_level)
   
   figs <- lapply(1:4, function(number) {
-    x_bound <- 0.035
-    binsw <- 0.003
-    if (number %in% c(2,3)) {
-      x_bound <- 0.25
-      binsw <- 0.02
-    }
+    x_bound <- 0.055
+    binsw <- 0.005
+    # if (number %in% c(2,3)) {
+    #   x_bound <- 0.0
+    #   binsw <- 0.02
+    # }
     entry <- switch(number, 11, 12, 21, 22)
     
     color1 <- "#ea5545"
@@ -656,3 +656,34 @@ test_fun <- function(lambda_level) {
   }
   return(res)
 }
+
+bias_check <- function(EfficientPrice) {
+  indexes_to_keep <- sample(1:86401, size = 2650)
+  Bias <- rep(0,1000)
+  for (i in 1:length(Bias)) {
+    YwN <- EfficientPrice[[i]][[1]][indexes_to_keep,]
+    Est <- RC_est(YwN)
+    Bias[i] <- Est[2,1] - EfficientPrice[[i]]["cov"][[1]][[1]][2,1]
+  }
+  YwN <- EfficientPrice[[1]][[1]][indexes_to_keep,]
+  
+  Est <- RC_est(YwN)
+  Bias <- Est[2,1] - EfficientPrice[[1]]["cov"][[1]][[1]][2,1]
+  
+  return(Bias)
+}
+
+bias_plot <- function(bias_res) {
+  bias_random <- rep(0,1000)
+  bias_refreshed <- rep(0,1000)
+  for (i in 1:1000) {
+    bias_random[i] <- bias_res[[i]][['bias_random']][2,1]
+    bias_refreshed[i] <- bias_res[[i]][['bias_refreshed']][2,1]
+  }
+  par(mfrow = c(1,2))
+  hist(bias_random)
+  hist(bias_refreshed)
+  par(mfrow = c(1,1))
+}
+
+

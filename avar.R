@@ -10,6 +10,7 @@ suppressMessages({
   library(ggplot2)
 })
 
+source("Euler_scheme.R")
 ### functions -----------------------------------------------------------------
 g_fun <- function(x,param = list()) {
   min(x,1-x)
@@ -437,12 +438,12 @@ refreshData <- function(Y_mat) {
       }
     }
   }
+
   indexes_to_keep <- sapply(rowSums(update_logic), function(number,Y_mat) {
     if (number == ncol(Y_mat)) {return(T)} else {return(F)}
   }, Y_mat = Y_mat)
   
   res <- Y_mat[indexes_to_keep,]
-  
   return(res)
 }
 
@@ -497,7 +498,7 @@ simulation <- function(lambdas, EfficientPrice){
       magrittr::set_names(names(YwN))
     YwN <- YwNAS
   }
-  
+  browser()
   #Define the true Cov
   TrueCov <- EfficientPrice[["cov"]][[1]]
   #Estimate and append results
@@ -532,7 +533,6 @@ simulation <- function(lambdas, EfficientPrice){
 }
 
 ### Testing -------------------------------------------------------------------
-source("Euler_scheme.R")
 sim <- simulate_prices(n_prices = 2, Tend = 1, N = 86400, gamma2 = 0.001)
 sim$cov #Analytical cov
 Y <- sim$XwN
@@ -576,15 +576,13 @@ for (i in 1:1000) {
 }
 n_list <- append(n_list,list(mean(res)))
 
-
-
 ### Simulation ----------------------------------------------------------------
 set.seed(123)
 lambdas <- list(c(rep(10,9),20))
 EffPrice <- lapply(
-  1:1, 
+  1:10, 
   simulate_prices,
-  n_prices = 10, Tend = 1, N = 86400, gamma2 = 0
+  n_prices = 2, Tend = 1, N = 86400, gamma2 = 0
 )
 tic()
 simulation_result <- lapply(
