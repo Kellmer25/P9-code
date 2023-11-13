@@ -8,6 +8,7 @@ suppressMessages({
   library(data.table)
   library(highfrequency)
   library(ggplot2)
+  library(stringi)
 })
 
 source("Euler_scheme.R")
@@ -498,7 +499,7 @@ simulation <- function(lambdas, EfficientPrice){
       magrittr::set_names(names(YwN))
     YwN <- YwNAS
   }
-  browser()
+  
   #Define the true Cov
   TrueCov <- EfficientPrice[["cov"]][[1]]
   #Estimate and append results
@@ -530,6 +531,79 @@ simulation <- function(lambdas, EfficientPrice){
     "TrueCov" = TrueCov,
     "n" = nrow(YwN$MS0)
   ))
+}
+
+forex_RC <- function(forex_data) {
+  asset <- names(forex_data) %>% .[[2]]
+  forex_data <- forex_data %>% 
+    magrittr::set_colnames(c('time', 'price'))
+  daily_RC <- forex_data %>% 
+    dplyr::mutate(
+      Date = lubridate::date(time)
+    ) %>% 
+    dplyr::group_by(Date) %>% 
+    dplyr::summarise(RC = RC_est(price)) %>% 
+    dplyr::select(
+      Date,
+      "Realized Covariation" = RC
+    )
+  
+  return(list("daily_RC" = daily_RC, "asset"  = asset))
+}
+
+forex_plot <- function(RC_res) {
+  fancy_scientific <- function(l) {
+    # turn in to character string in scientific notation
+    # l <- format(l, scientific = TRUE)
+    l <- formatC(l, format = "e", digits = 1)
+    # e_index <- unlist(gregexpr('e', l))[1]
+    # if (e_index == 2) {
+    #   to_insert <- ".00"
+    # } else if (e_index == 4) {
+    #   to_insert <- "0"
+    # } else {to_insert <- ""}
+    # 
+    # stringi::stri_sub(l, from = e_index, to = e_index - 1) <- to_insert
+    # lhs <- substr(l, 1, e_index-1)
+    # rhs <- substr(l, e_index, nchar(l))
+    # l <- paste0(lhs, to_insert, rhs)
+    l <- gsub("0.0e\\+00","0",l)
+    # quote the part before the exponent to keep all the digits
+    l <- gsub("^(.*)e", "'\\1'e", l)
+    # turn the 'e+' into plotmath format
+    l <- gsub("e", "%*%10^", l)
+    # return this as an expression
+    
+    parse(text=l)
+  }
+  daily_RC <- RC_res[["daily_RC"]]
+  asset <- RC_res[["asset"]]
+  if (asset == "EURGDP") {asset <- "EURGBP"}
+  
+  fig <- ggplot(daily_RC) + 
+    geom_line(aes(x = Date,y = `Realized Covariation`), color = "#ea5545") + 
+    theme_bw() +
+    ggtitle(paste0(asset)) +
+    ylab("") + xlab("") +
+    scale_y_continuous(labels=fancy_scientific)
+  fig
+}
+
+get_forex_plots <- function(forex_list) {
+  RC_list <- lapply(forex_list, forex_RC)
+  
+  forex_plots <- lapply(RC_list, forex_plot)
+  
+  final_plot <- ggarrange(
+    forex_plots[[1]],forex_plots[[2]],forex_plots[[3]],
+    forex_plots[[4]],forex_plots[[5]],forex_plots[[6]],
+    forex_plots[[7]],forex_plots[[8]],forex_plots[[9]],
+    forex_plots[[10]],forex_plots[[11]],forex_plots[[12]],
+    NULL, forex_plots[[13]], NULL,
+    ncol=3, nrow=5
+  )
+  final_plot
+  
 }
 
 ### Testing -------------------------------------------------------------------
