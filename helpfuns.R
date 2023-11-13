@@ -304,7 +304,7 @@ load_spx_data = function() {
   colnames(df) = c("time", "spx")
   return(df)
 }
-  
+
 ### Stock data -----------------------------------------------------------------
 get_polygon_df = function(tickers, multiplier="1", interval="minute", from_date="2023-09-03", to_date="2023-09-29") {
   df = FALSE
@@ -686,4 +686,64 @@ bias_plot <- function(bias_res) {
   par(mfrow = c(1,1))
 }
 
+get_return_df <- function(forex_data) {
+  asset <- names(forex_data) %>% .[[2]]
+  forex_data <- forex_data %>% 
+    magrittr::set_colnames(c('time', 'price'))
+  get_return <- function(val) {
+    res <- val[1] - val[length(val)]
+    return(res)
+  }
+  return_data <- forex_data %>% 
+    dplyr::mutate(
+      Date = lubridate::date(time),
+    ) %>% 
+    dplyr::group_by(Date) %>% 
+    dplyr::summarise(Returns = get_return(price))
+  
+  return(list('return_data' = return_data, "asset" = asset))
+}
+
+
+
+get_hist_plot <- function(forex_data) {
+  hist_data <- forex_data$return_data
+  asset <- forex_data$asset
+  x_lim <- max(abs(min(hist_data$Returns)), max(hist_data$Returns))
+  fig <- ggplot(hist_data, aes(Returns)) +
+    xlim(-x_lim, x_lim) +
+    geom_histogram(
+      aes(y = ..density..),
+      alpha = 0.4,
+      position = "identity",
+      color = "#27aeef",
+      fill = "#27aeef"
+    ) +
+    stat_function(
+      fun = dnorm, args = list(
+        mean = mean(hist_data$Returns),
+        sd = sd(hist_data$Returns)
+      )
+    ) +
+    ylab("") + xlab("") + ggtitle(asset) + 
+    theme_bw()
+  fig
+}
+
+get_total_hist <- function(forex_list) {
+  hist_list <- lapply(forex_list, get_return_df)
+  
+  figures <- lapply(hist_list, get_hist_plot)
+  
+  final_plot <- ggarrange(
+    figures[[1]],figures[[2]],figures[[3]],
+    figures[[4]],figures[[5]],figures[[6]],
+    figures[[7]],figures[[8]],figures[[9]],
+    figures[[10]],figures[[11]],figures[[12]],
+    NULL, figures[[13]], NULL,
+    ncol=3, nrow=5
+  )
+  final_plot
+  
+}
 
