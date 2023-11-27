@@ -197,6 +197,4 @@ get_H_t_all <- function(RC_list, return_mat){
   return(H_end)
 }
 
-### Main ----------------------------------------------------------------------
-H_end <- get_H_t_all(RC_list, return_mat)
 
