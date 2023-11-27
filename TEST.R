@@ -3,6 +3,7 @@ library(dplyr)
 library(highfrequency)
 library(data.table)
 library(glue)
+library(xts)
 
 obs_times = function(N=23400, lambdas=c(3,6), df=FALSE) {
   len = length(lambdas)
@@ -30,18 +31,44 @@ obs_times = function(N=23400, lambdas=c(3,6), df=FALSE) {
 }
 
 refresh_times = function(df) {
-  observed = rep(FALSE, ncol(df))
-  times = c(max(df[1, ]))
+  tickers = colnames(df)
+  observed = list()
+  for (ticker in tickers) {
+    observed[[ticker]] = df[1, ticker]
+  }
   
+  times = c()
+  for (i in 1:nrow(df)) {
+    row = df[i, ]
+    test = unlist(observed)
+    for (ticker in tickers) {
+      if (isFALSE(observed[[ticker]])) {
+        if (row[ticker] >= times[length(times)]) {
+          observed[[ticker]] = row[ticker]
+        }
+      }
+    }
+    if (all(sapply(observed, function(x) x != FALSE))) {
+      test = unlist(observed)
+      obs_time = max(test)
+      times = c(times, obs_time)
+      observed = lapply(observed, function(x) FALSE)
+    }
+  }
+  return(times)
 }
 
 set.seed(12311)
 df = obs_times(N=10, lambdas=c(1,2,3), df=TRUE)
 
 ggplot(df) + 
-  geom_point(aes(x=lambda1, y=1), col="blue") + 
-  geom_point(aes(x=lambda2, y=2), col="red") + 
-  geom_point(aes(x=lambda3, y=3), col="green") + 
-  scale_x_continuous(breaks=) + 
-  labs(x="Time", y = "Asset")
+  geom_point(aes(x=lambda1, y=1), col="blue", size=3) + 
+  geom_point(aes(x=lambda2, y=2), col="red", size=3) + 
+  geom_point(aes(x=lambda3, y=3), col="green", size=3) +
+  geom_vline(xintercept=times, linetype="dashed", linewidth=0.8) + 
+  scale_x_continuous(breaks=seq(1, 20, 1)) + 
+  scale_y_continuous(breaks=c(1,2,3), limits=c(0.5,3.5)) +
+  theme(panel.border = element_blank()) + 
+  labs(x="Time", y = "Lambda") + 
+  theme_bw()
 

@@ -58,7 +58,7 @@ lobster_data = get_lobster_data(ticker) %>%
   mutate(time = round_date(time, unit="second")) %>% 
   dplyr::filter(type==4 | type==5) %>% 
   distinct(time, .keep_all=TRUE) %>% 
-  mutate(price = price) %>% 
+  mutate(price = log(price)) %>% 
   dplyr::select(time, price)
 
 as.POSIXct(lobster_data$time, origin="1970-01-01") %>% diff() %>% mean()
