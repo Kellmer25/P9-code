@@ -56,6 +56,11 @@ R_t <- function(theta, real_corr_mat_list, R_bar, P_bar){ # computing the condit
   R[[1]] <- R0
   
   R_tilde <- (1 - beta) * R_bar - alpha * P_bar
+  R_tilde_ev <- eigen(R_tilde)$values
+  attempt <- try(min(R_tilde_ev))
+  if (class(attempt) == "try-error"){browser()}
+  R_tilde <- (R_tilde + min(R_tilde_ev)* diag(rep(1,nrow(R_tilde)))) / 
+    (1+min(R_tilde_ev))
   
   for (i in 1:(length(real_corr_mat_list)-1)) {
     R[[i+1]] <-  R_tilde + alpha * real_corr_mat_list[[i]] + beta * R[[i]]
@@ -118,9 +123,9 @@ QLH <- function(RC_list, return_mat) {
   
   P_bar <- get_P_bar(RL_t)
   
-  R_bar <- P_bar
-  # u_t <- return_mat * diag(cov(return_mat))
-  # R_bar <- cor(u_t)
+  # R_bar <- P_bar
+  u_t <- return_mat * diag(cov(return_mat))
+  R_bar <- cor(u_t)
   tic()
   theta_H1 <- solnp(
     pars = thetah, 
@@ -194,7 +199,7 @@ get_H_t_all <- function(RC_list, return_mat){
   
   H_end <- get_H_t(t = length(RC_list), cond_var_vec = h, cond_corr_mat = R)
   
-  return(H_end)
+  return(list("H_end" = H_end, "theta_H" = theta_H))
 }
 
 
