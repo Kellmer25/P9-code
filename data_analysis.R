@@ -1,3 +1,8 @@
+# Dependencies
+source("helpfuns.R")
+
+data = get_forex_data()
+
 # Initial data analysis
 data = get_forex_data_dfs()
 info = get_empirical_data(data)
@@ -82,14 +87,14 @@ log_stock_df[2:ncol(log_stock_df)] = log(stock_df[2:ncol(stock_df)])
 
 info = get_refresh_avg_time(log_stock_df)
 
-# Save and load
-save(data, file="log_forex_list.Rdata")
-save(refresh_data, file="log_forex_refresh.RData")
+# Save and load for lists
+save(data, file="Ignore/log_forex_list.Rdata")
+save(refresh_data, file="Ignore/log_forex_refresh.RData")
 save(test, file="matrices.RData")
-load(file="log_forex_refresh.RData")
-load(file="log_forex_list.RData")
 
+load(file="Ignore/log_forex_refresh.RData")
+load(file="Ignore/log_forex_list.RData")
 
-# Save and load
+# Save and load for dfs
 save(data, file="forex_df.Rdata")
 save(refresh_data, file="forex_refresh_df.RData")
