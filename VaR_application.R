@@ -28,5 +28,3 @@ res <- solnp(
   eqfun = eqn,
   eqB = 1
 )
-
-weights <- res$pars
