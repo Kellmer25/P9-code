@@ -42,15 +42,15 @@ get_daily_RC <- function(refreshed_forex) {
 }
 
 ### Data load -----------------------------------------------------------------
-forex_data <- get_forex_data()
-
-refreshed_forex <- refresh_list(forex_data)
-
-### Get estimates -------------------------------------------------------------
-RC_series <- get_daily_RC(refreshed_forex)
-
-saveRDS(RC_series, "RC_series")
-saveRDS(refreshed_forex, "refreshed_forex")
+# forex_data <- get_forex_data()
+# 
+# refreshed_forex <- refresh_list(forex_data)
+# 
+# ### Get estimates -------------------------------------------------------------
+# RC_series <- get_daily_RC(refreshed_forex)
+# 
+# saveRDS(RC_series, "RC_series")
+# saveRDS(refreshed_forex, "refreshed_forex")
 
 
 
