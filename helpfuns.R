@@ -705,7 +705,6 @@ get_return_df <- function(forex_data) {
 }
 
 
-
 get_hist_plot <- function(forex_data) {
   hist_data <- forex_data$return_data
   asset <- forex_data$asset

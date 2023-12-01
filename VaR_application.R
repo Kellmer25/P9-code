@@ -13,6 +13,8 @@ suppressMessages({
   library(Rsolnp)
 })
 
+source("helpfuns.R")
+source("get_RC.R")
 ### Functions -----------------------------------------------------------------
 VaR <- function(omega, sigma, alpha) {
   res <- sqrt(t(omega)%*%sigma%*%omega)*qnorm(alpha)
@@ -33,3 +35,5 @@ res <- solnp(
   eqfun = eqn,
   eqB = c(1,0)
 )
+
+
