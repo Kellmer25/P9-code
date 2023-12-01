@@ -94,9 +94,10 @@ get_polygon_time_series = function(ticker, multiplier="1", interval="minute", fr
 }
 
 ### Forex data -----------------------------------------------------------------
-get_forex_data_dfs = function(from_month="01", to_month="09") {
+get_forex_data_dfs = function() {
   paths = list.files(path="Forex/", pattern=NULL, all.files=FALSE, full.names=TRUE)
-  months = paste0("20230", seq(from_month, to_month))
+  months = c("202301", "202302", "202303", "202304", "202305", "202306", 
+             "202307", "202308", "202309", "202310", "202311")
   data = list()
   counter = 1
   len = length(paths)
@@ -133,9 +134,10 @@ get_forex_data_dfs = function(from_month="01", to_month="09") {
   return(data)
 }
 
-get_forex_data = function(from_month="01", to_month="09") {
+get_forex_data = function() {
   paths = list.files(path="Forex/", pattern=NULL, all.files=FALSE, full.names=TRUE)
-  months = paste0("20230", seq(from_month, to_month))
+  months = c("202301", "202302", "202303", "202304", "202305", "202306", 
+             "202307", "202308", "202309", "202310", "202311")
   data = list()
   counter = 1
   len = length(paths)
@@ -704,7 +706,18 @@ get_return_df <- function(forex_data) {
   return(list('return_data' = return_data, "asset" = asset))
 }
 
+get_daily_return_df = function(forex_refresh_df) {
+  daily_df = data.frame(diff(as.matrix(forex_refresh_df))) %>% 
+    dplyr::mutate(date = lubridate::date(rownames(.)), .before=1) %>% 
+    dplyr::group_by(date) %>% 
+    dplyr::summarise_all(sum)
+  return(daily_df)
+}
 
+get_qq_plots = function(forex_refresh_data) {
+  daily_df = get_daily_return_df(forex_refresh_df)
+  
+}
 
 get_hist_plot <- function(forex_data) {
   hist_data <- forex_data$return_data
