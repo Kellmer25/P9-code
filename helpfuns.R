@@ -716,7 +716,6 @@ get_daily_return_df = function(forex_refresh_df) {
 
 get_qq_plots = function(forex_refresh_data) {
   daily_df = get_daily_return_df(forex_refresh_df)
-  
 }
 
 get_hist_plot <- function(forex_data) {
