@@ -16,24 +16,31 @@ suppressMessages({
   library(gridExtra)
 })
 
-source("helpfuns.R")
-source("get_RC.R")
+# source("helpfuns.R")
+# source("get_RC.R")
 ### Functions -----------------------------------------------------------------
 portfolio_strategy <- function(
-    daily_return,
-    intraday_refreshed, 
-    start_date = "2023-10-02"
+  daily_return,
+  intraday_refreshed, 
+  start_date = "2023-10-02"
 ) {
-  browser()
+  
+  mu_t <- daily_return %>% 
+    dplyr::filter(date < lubridate::as_date("2023-10-02")) %>% 
+    dplyr::select(-date) %>% 
+    as.matrix() %>% 
+    colMeans()
+  
   RC_list <- get_daily_RC(intraday_refreshed)
-  get_weights <- function(Date, daily_return, intraday_refreshed, RC_list) {
-    VaR <- function(omega, sigma, alpha) {
-      res <- sqrt(t(omega)%*%sigma%*%omega)*qnorm(alpha)
+  
+  get_weights <- function(Date, daily_return, intraday_refreshed, RC_list, mu_t) {
+    VaR <- function(omega, sigma, alpha, mu_t) {
+      res <- -t(omega)%*%mu_t + sqrt(t(omega)%*%sigma%*%omega)*qt(p = alpha, df = 19)
       return(res)
     }
     
-    eqn <- function(omega, sigma, alpha) {
-      return(sum(omega))
+    eqn <- function(omega, sigma, alpha, mu_t) {
+      return(c(sum(omega),t(omega)%*%mu_t))
     }
     
     #forecast H_t | t-1
@@ -64,10 +71,11 @@ portfolio_strategy <- function(
       fun = VaR,
       sigma = H_end,
       alpha = 0.95,
+      mu_t = mu_t,
       LB = rep(-100, 13),#all unknowns are restricted to be positiv
       UB = rep(100, 13),
       eqfun = eqn,
-      eqB = 1
+      eqB = c(1,0.0001)
     )$pars
     
     return(res)
@@ -82,19 +90,14 @@ portfolio_strategy <- function(
     FUN = get_weights,
     daily_return = daily_return,
     intraday_refreshed = intraday_refreshed,
-    RC_list = RC_list
+    RC_list = RC_list,
+    mu_t = mu_t
   )
   
-  DCC_pnl <- get_PnL(weights_list = weights_list, dates = dates, daily_return, intraday_refreshed = intraday_refreshed)
-  
-  buynhold_pnl <- get_PnL(weights_list = buynhold_weights, dates = dates, daily_return, intraday_refreshed = intraday_refreshed)
-  
-  browser()
-  daily_return
-  
+  return(weights_list)
 }
 
-pnl_curves <- function(weights_list, daily_return, intraday_refreshed) {
+pnl_curves <- function(weights_list, daily_return, intraday_refreshed, start_date = "2023-10-02") {
   dates <- daily_return %>% 
     dplyr::filter(date >= start_date) %>% 
     .[["date"]]
@@ -203,14 +206,13 @@ pnl_curves <- function(weights_list, daily_return, intraday_refreshed) {
   plot_list_of_curves_ggplot(pnl_curves)
 }
 
-plot_weigth_curves <- function(weights_list, daily_return, intraday_refreshed) {
+plot_weigth_curves <- function(weights_list, daily_return, intraday_refreshed, start_date = "2023-10-02") {
   dates <- daily_return %>% 
     dplyr::filter(date >= start_date) %>% 
     .[["date"]]
   
   weights_list <- weights_list %>% 
     unname()
-  
   df <- data.frame(matrix(NA, nrow = 40, ncol = 13)) %>% 
     magrittr::set_colnames(c(colnames(intraday_refreshed)))
   
@@ -223,8 +225,8 @@ plot_weigth_curves <- function(weights_list, daily_return, intraday_refreshed) {
   
   box_weights_df <- weights_df %>% 
     dplyr::select(-Date)
-  dplyr::group_by(Asset) %>% 
-    dplyr::summarise(Weight = mean(Weight))
+  # dplyr::group_by(Asset) %>% 
+  # dplyr::summarise(Weight = mean(Weight))
   
   p1 <- ggplot(weights_df, aes(x = Date, y = Weight, color = Asset)) +
     geom_line(size = 1) +
@@ -252,7 +254,7 @@ plot_weigth_curves <- function(weights_list, daily_return, intraday_refreshed) {
 }
 
 ### Data ----------------------------------------------------------------------
-load("daily_return_13.RData")
+# load("daily_return_13.RData")
 load("refresh_last.RData")
 
 # daily_return <- tester
@@ -280,5 +282,7 @@ daily_return <- data.frame(diff(as.matrix(intraday_refreshed))) %>%
 return_mat <- daily_return %>% 
   dplyr::select(-date) %>% 
   as.matrix()
+
+
 H_end <- get_H_t_all(RC_list, return_mat)
 
