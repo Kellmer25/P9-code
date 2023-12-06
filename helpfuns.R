@@ -620,34 +620,34 @@ get_obs_number <- function(simulation_result, lambda_level) {
   return(obs_n/1000)
 }
 
-twobytwo(lambda_level = 1, simulation_result = simulation_result)
-twobytwo(lambda_level = 2, simulation_result = simulation_result)
-twobytwo(lambda_level = 3, simulation_result = simulation_result)
-twobytwo(lambda_level = 4, simulation_result = simulation_result)
-twobytwo(lambda_level = 5, simulation_result = simulation_result)
-
-stock_df = get_polygon_df(tickers)
-times = get_stock_avg_time(stock_df)
-
-refresh_stock = get_stock_refresh(stock_df)
-info = get_refresh_avg_time(stock_df)
-
-log_stock_df = stock_df
-log_stock_df[2:ncol(log_stock_df)] = log(stock_df[2:ncol(stock_df)])
-
-info = get_refresh_avg_time(log_stock_df)
-
-# Save and load
-save(data, file="log_forex_list.Rdata")
-save(refresh_data, file="log_forex_refresh.RData")
-
-# Save and load
-save(data, file="forex_list.Rdata")
-save(refresh_data, file="forex_refresh.RData")
-
-# Save and load
-save(data, file="100_logforex_list.Rdata")
-save(refresh_data, file="100_logforex_refresh.RData")
+# twobytwo(lambda_level = 1, simulation_result = simulation_result)
+# twobytwo(lambda_level = 2, simulation_result = simulation_result)
+# twobytwo(lambda_level = 3, simulation_result = simulation_result)
+# twobytwo(lambda_level = 4, simulation_result = simulation_result)
+# twobytwo(lambda_level = 5, simulation_result = simulation_result)
+# 
+# stock_df = get_polygon_df(tickers)
+# times = get_stock_avg_time(stock_df)
+# 
+# refresh_stock = get_stock_refresh(stock_df)
+# info = get_refresh_avg_time(stock_df)
+# 
+# log_stock_df = stock_df
+# log_stock_df[2:ncol(log_stock_df)] = log(stock_df[2:ncol(stock_df)])
+# 
+# info = get_refresh_avg_time(log_stock_df)
+# 
+# # Save and load
+# save(data, file="log_forex_list.Rdata")
+# save(refresh_data, file="log_forex_refresh.RData")
+# 
+# # Save and load
+# save(data, file="forex_list.Rdata")
+# save(refresh_data, file="forex_refresh.RData")
+# 
+# # Save and load
+# save(data, file="100_logforex_list.Rdata")
+# save(refresh_data, file="100_logforex_refresh.RData")
 
 test_fun <- function(lambda_level) {
   res <- matrix(rep(0,100),c(10,10))

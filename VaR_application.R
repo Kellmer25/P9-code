@@ -16,13 +16,16 @@ suppressMessages({
   library(gridExtra)
 })
 
-# source("helpfuns.R")
-# source("get_RC.R")
+source("helpfuns.R")
+source("get_RC.R")
+source("avar.R")
+source("DCC-HEAVY_forecasting.R")
 ### Functions -----------------------------------------------------------------
 portfolio_strategy <- function(
-  daily_return,
-  intraday_refreshed, 
-  start_date = "2023-10-02"
+    daily_return,
+    intraday_refreshed, 
+    start_date = "2023-10-02",
+    return_H = F
 ) {
   
   mu_t <- daily_return %>% 
@@ -33,7 +36,7 @@ portfolio_strategy <- function(
   
   RC_list <- get_daily_RC(intraday_refreshed)
   
-  get_weights <- function(Date, daily_return, intraday_refreshed, RC_list, mu_t) {
+  get_weights <- function(Date, daily_return, intraday_refreshed, RC_list, mu_t, return_H = return_H) {
     VaR <- function(omega, sigma, alpha, mu_t) {
       res <- -t(omega)%*%mu_t + sqrt(t(omega)%*%sigma%*%omega)*qt(p = alpha, df = 10)
       return(res)
@@ -59,10 +62,27 @@ portfolio_strategy <- function(
       dplyr::filter(
         date < Date
       )
-    
     RC_list_filt <- RC_list[1:(which(names(RC_list) == as.character(Date))-1)]
     
     H_end <- get_H_t_all(RC_list = RC_list_filt, return_mat = returns_mat)$H_end
+    if (return_H) {
+      return(H_end)
+    }
+    # res <- solnp(
+    #   pars = as.matrix(
+    #     rep(1/(ncol(daily_return)-1), ncol(daily_return)-1),
+    #     ncol = 1
+    #   ), 
+    #   fun = VaR,
+    #   sigma = H_end,
+    #   alpha = 0.95,
+    #   mu_t = mu_t,
+    #   LB = rep(-2, ncol(intraday_refreshed)),#all unknowns are restricted to be positiv
+    #   UB = rep(2, ncol(intraday_refreshed)),
+    #   eqfun = eqn,
+    #   eqB = c(1,0) #0.08/250
+    # )$pars
+    
     res <- solnp(
       pars = as.matrix(
         rep(1/(ncol(daily_return)-1), ncol(daily_return)-1),
@@ -76,7 +96,7 @@ portfolio_strategy <- function(
       UB = rep(2, ncol(intraday_refreshed)),
       eqfun = eqn,
       eqB = c(1,0.08/250) #0.08/250
-    )$pars
+    )$values %>% tail(1)
     
     return(res)
   }
@@ -91,7 +111,8 @@ portfolio_strategy <- function(
     daily_return = daily_return,
     intraday_refreshed = intraday_refreshed,
     RC_list = RC_list,
-    mu_t = mu_t
+    mu_t = mu_t,
+    return_H = return_H
   )
   
   return(weights_list)
@@ -270,3 +291,44 @@ daily_return <- data.frame(diff(as.matrix(intraday_refreshed))) %>%
 # 
 # H_end <- get_H_t_all(RC_list, return_mat)
 
+vars_df <- data.frame(
+  Vars = c(
+    unlist(vars),
+    unlist(vars_mu),
+    unlist(vars_t),
+    unlist(vars_t_mu)
+  ),
+  Mu = c(
+    rep("No",length(vars)),
+    rep("Yes",length(vars)),
+    rep("No",length(vars)),
+    rep("Yes",length(vars))
+  ),
+  Distribution = c(
+    rep("Gaussian",length(vars)),
+    rep("Gaussian",length(vars)),
+    rep("Student's t",length(vars)),
+    rep("Student's t",length(vars))
+  )
+)
+
+p1 <- ggplot2::ggplot(
+  data = vars_df %>% 
+    dplyr::filter(Mu == "Yes"), 
+  aes(x = Distribution, y = Vars, fill = Distribution)
+) + ggplot2::geom_boxplot() + 
+  labs(x = expression(paste(mu,' = 0.0003')), y = "VaR", title = " Distribution of Forecasted VaR") +
+  scale_fill_manual(values = c("#31688e","#5dc863")) +
+  theme_minimal() +
+  theme(legend.position = "none")
+p2 <- ggplot2::ggplot(
+  data = vars_df %>% 
+    dplyr::filter(Mu == "No"), 
+  aes(x = Distribution, y = Vars, fill = Distribution)
+) + ggplot2::geom_boxplot() +
+  labs(x = expression(paste(mu,' = 0')), y = "VaR", title = "") +
+  scale_fill_manual(values = c("#31688e","#5dc863")) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+cowplot::plot_grid(p1, p2, ncol = 2)
