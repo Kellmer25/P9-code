@@ -567,8 +567,8 @@ twobytwo <- function(lambda_level, simulation_result) {
     # }
     entry <- switch(number, 11, 12, 21, 22)
     
-    color1 <- "#ea5545"
-    color2 <- "#27aeef"
+    color1 <- "#31688e"
+    color2 <- "#5dc863"
     
     df <- data.frame(
       "MRC" = mrc_res[[number]],
@@ -601,7 +601,8 @@ twobytwo <- function(lambda_level, simulation_result) {
         linetype="dashed"
       ) + xlab("Bias") + ylab("Count") +
       ggtitle(bquote(Bias ~ of ~ MRC[.(entry)] ~ and ~ RC[.(entry)])) +
-      scale_y_continuous(expand =  expansion(mult = c(0, 0.05)))
+      scale_y_continuous(expand =  expansion(mult = c(0, 0.05))) +
+      theme_minimal()
     
     return(fig)
   })
@@ -609,7 +610,14 @@ twobytwo <- function(lambda_level, simulation_result) {
     figs[[1]],figs[[2]],figs[[3]],figs[[4]], 
     ncol=2, nrow=2, common.legend = TRUE, legend="bottom"
   )
+  browser()
+  png(
+    filename = paste0("bias_plot_l", lambda_level, ".png"),
+    width = 1000,
+    height = 550
+  )
   final_plot
+  dev.off()
 }
 
 get_obs_number <- function(simulation_result, lambda_level) {
@@ -620,11 +628,11 @@ get_obs_number <- function(simulation_result, lambda_level) {
   return(obs_n/1000)
 }
 
-# twobytwo(lambda_level = 1, simulation_result = simulation_result)
-# twobytwo(lambda_level = 2, simulation_result = simulation_result)
-# twobytwo(lambda_level = 3, simulation_result = simulation_result)
-# twobytwo(lambda_level = 4, simulation_result = simulation_result)
-# twobytwo(lambda_level = 5, simulation_result = simulation_result)
+twobytwo(lambda_level = 1, simulation_result = simulation_result)
+twobytwo(lambda_level = 2, simulation_result = simulation_result)
+twobytwo(lambda_level = 3, simulation_result = simulation_result)
+twobytwo(lambda_level = 4, simulation_result = simulation_result)
+twobytwo(lambda_level = 5, simulation_result = simulation_result)
 # 
 # stock_df = get_polygon_df(tickers)
 # times = get_stock_avg_time(stock_df)
