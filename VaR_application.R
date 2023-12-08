@@ -38,7 +38,7 @@ portfolio_strategy <- function(
   
   get_weights <- function(Date, daily_return, intraday_refreshed, RC_list, mu_t, return_H = return_H) {
     VaR <- function(omega, sigma, alpha, mu_t) {
-      res <- -t(omega)%*%mu_t + sqrt(t(omega)%*%sigma%*%omega)*qt(p = alpha, df = 10)
+      res <- -t(omega)%*%mu_t + sqrt(t(omega)%*%sigma%*%omega)*qt(p = alpha, df=10)
       return(res)
     }
     
@@ -195,7 +195,7 @@ pnl_curves <- function(weights_list, daily_return, intraday_refreshed, start_dat
     daily_return = daily_return, 
     intraday_refreshed = intraday_refreshed
   )
-  
+  browser()
   plot_list_of_curves_ggplot <- function(data_list) {
     # Combine the list of vectors into a data frame
     data_df <- data.frame(
@@ -264,7 +264,8 @@ plot_weigth_curves <- function(weights_list, daily_return, intraday_refreshed, s
     theme_minimal() +
     theme(axis.text.x=element_text(colour="white")) +
     scale_fill_viridis(discrete = TRUE, option = "D") +
-    geom_hline(yintercept=0, linetype='dashed', col = 'black')
+    geom_hline(yintercept=0, linetype='dashed', col = 'black') +
+    coord_cartesian(ylim = c(-30, 65))
   
   gridExtra::grid.arrange(p2,ncol=1)
 }
@@ -291,6 +292,15 @@ daily_return <- data.frame(diff(as.matrix(intraday_refreshed))) %>%
 # 
 # H_end <- get_H_t_all(RC_list, return_mat)
 
+png("weights_t_mu.png", height = 550, width = 1000)
+plot_weigth_curves(weights_list = weights_t_mu, daily_return,intraday_refreshed)
+dev.off()
+
+vars <- portfolio_strategy(daily_return, intraday_refreshed)
+vars_mu <- portfolio_strategy(daily_return, intraday_refreshed)
+vars_t <- portfolio_strategy(daily_return, intraday_refreshed)
+vars_t_mu <- portfolio_strategy(daily_return, intraday_refreshed)
+
 vars_df <- data.frame(
   Vars = c(
     unlist(vars),
@@ -316,7 +326,7 @@ p1 <- ggplot2::ggplot(
   data = vars_df %>% 
     dplyr::filter(Mu == "Yes"), 
   aes(x = Distribution, y = Vars, fill = Distribution)
-) + ggplot2::geom_boxplot() + 
+) + ggplot2::geom_boxplot(alpha = 0.6) + 
   labs(x = expression(paste(mu,' = 0.0003')), y = "VaR", title = " Distribution of Forecasted VaR") +
   scale_fill_manual(values = c("#31688e","#5dc863")) +
   theme_minimal() +
@@ -325,7 +335,7 @@ p2 <- ggplot2::ggplot(
   data = vars_df %>% 
     dplyr::filter(Mu == "No"), 
   aes(x = Distribution, y = Vars, fill = Distribution)
-) + ggplot2::geom_boxplot() +
+) + ggplot2::geom_boxplot(alpha = 0.6) +
   labs(x = expression(paste(mu,' = 0')), y = "VaR", title = "") +
   scale_fill_manual(values = c("#31688e","#5dc863")) +
   theme_minimal() +
