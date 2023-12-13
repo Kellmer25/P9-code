@@ -25,7 +25,9 @@ portfolio_strategy <- function(
     daily_return,
     intraday_refreshed, 
     start_date = "2023-10-02",
-    return_H = F
+    return_H = F,
+    t = F,
+    mu = 0
 ) {
   
   mu_t <- daily_return %>% 
@@ -36,13 +38,18 @@ portfolio_strategy <- function(
   
   RC_list <- get_daily_RC(intraday_refreshed)
   
-  get_weights <- function(Date, daily_return, intraday_refreshed, RC_list, mu_t, return_H = return_H) {
-    VaR <- function(omega, sigma, alpha, mu_t) {
-      res <- -t(omega)%*%mu_t + sqrt(t(omega)%*%sigma%*%omega)*qt(p = alpha, df=10)
+  get_weights <- function(Date, daily_return, intraday_refreshed, RC_list, mu_t, return_H = return_H, t = t, mu = mu) {
+    VaR <- function(omega, sigma, alpha, mu_t, t = t) {
+      if (t) {
+        quantile <- qt(p = alpha, df=10)
+      } else {
+        quantile <- qnorm(p = alpha)
+      }
+      res <- -t(omega)%*%mu_t + sqrt(t(omega)%*%sigma%*%omega)*quantile
       return(res)
     }
     
-    eqn <- function(omega, sigma, alpha, mu_t) {
+    eqn <- function(omega, sigma, alpha, mu_t, t) {
       return(c(sum(omega),t(omega)%*%mu_t))
     }
     
@@ -92,15 +99,15 @@ portfolio_strategy <- function(
       sigma = H_end,
       alpha = 0.95,
       mu_t = mu_t,
+      t = t,
       LB = rep(-2, ncol(intraday_refreshed)),#all unknowns are restricted to be positiv
       UB = rep(2, ncol(intraday_refreshed)),
       eqfun = eqn,
-      eqB = c(1,0.08/250) #0.08/250
+      eqB = c(1,mu) #0.08/250
     )$values %>% tail(1)
     
     return(res)
   }
-  
   dates <- daily_return %>% 
     dplyr::filter(date >= start_date) %>% 
     .[["date"]]
@@ -112,7 +119,9 @@ portfolio_strategy <- function(
     intraday_refreshed = intraday_refreshed,
     RC_list = RC_list,
     mu_t = mu_t,
-    return_H = return_H
+    return_H = return_H,
+    t = t,
+    mu = mu
   )
   
   return(weights_list)
@@ -195,7 +204,6 @@ pnl_curves <- function(weights_list, daily_return, intraday_refreshed, start_dat
     daily_return = daily_return, 
     intraday_refreshed = intraday_refreshed
   )
-  browser()
   plot_list_of_curves_ggplot <- function(data_list) {
     # Combine the list of vectors into a data frame
     data_df <- data.frame(
@@ -203,29 +211,36 @@ pnl_curves <- function(weights_list, daily_return, intraday_refreshed, start_dat
       EUR = unlist(data_list)*100,
       Portfolio = rep(names(data_list), each = length(data_list[[1]]))
     )
+      # dplyr::mutate(Portfolio = dplyr::if_else(Portfolio == "VaR", "aVaR", Portfolio))
     
     bar_df <- data_df %>% 
       dplyr::group_by(Portfolio) %>% 
       dplyr::summarise(EUR = tail(EUR,1))
     # Create the ggplot
-    p1 <- ggplot(data_df, aes(x = Index, y = EUR, color = Portfolio)) +
-      geom_line(size = 1) +
+    p1 <- ggplot(data_df, aes(x = Index, y = EUR, color = Portfolio, alpha = Portfolio)) +
+      geom_line(data = data_df, size = 1) +
       labs(x = "Date", y = "Return (%)", title = "Cumulative PnL") +
-      scale_color_viridis(discrete = TRUE, option = "D") +
+      scale_color_manual(values = c(rev(viridis(13)))) +
+      scale_alpha_manual(values = c(rep(0.4,12),1), guide = guide_legend(title = "Portfolio")) +
+      # scale_color_viridis(discrete = TRUE, option = "D") +
       theme_minimal() + 
       theme(legend.position="none")
     
-    p2 <- ggplot(bar_df, aes(x = Portfolio, y = EUR, fill = Portfolio)) + 
+    p2 <- ggplot(bar_df, aes(x = Portfolio, y = EUR, fill = Portfolio, alpha = Portfolio)) + 
       geom_bar(stat="identity") +
       labs(x = "", y = "", title = "Final PnL") +
-      scale_fill_viridis(discrete = TRUE, option = "D") +
+      scale_fill_manual(values = c(rev(viridis(13)))) +
+      scale_alpha_manual(values = c(rep(0.5,12),1), guide = guide_legend(title = "Portfolio")) +
+      # scale_fill_viridis(discrete = TRUE, option = "D") +
       theme_minimal() +
-      theme(axis.text.x=element_text(colour="white"))
+      theme(axis.text.x=element_text(colour="white")) 
+      # scale_fill_discrete(labels=c('VaR', rep("test", 12)))
     # theme(axis.text.x=element_blank())
     
     gridExtra::grid.arrange(p1,p2,ncol=2)
     # cowplot::plot_grid()
   }
+  
   plot_list_of_curves_ggplot(pnl_curves)
   
   return(pnl_curves)
@@ -259,7 +274,7 @@ plot_weigth_curves <- function(weights_list, daily_return, intraday_refreshed, s
     theme(legend.position="none")
   
   p2 <- ggplot(box_weights_df, aes(x=Asset, y=Weight, fill=Asset)) +
-    geom_boxplot() +
+    geom_boxplot(alpha = 0.6) +
     labs(x = "", y = "Weight (%)", title = "VaR Portfolio Weights") +
     theme_minimal() +
     theme(axis.text.x=element_text(colour="white")) +
@@ -296,10 +311,31 @@ png("weights_t_mu.png", height = 550, width = 1000)
 plot_weigth_curves(weights_list = weights_t_mu, daily_return,intraday_refreshed)
 dev.off()
 
-vars <- portfolio_strategy(daily_return, intraday_refreshed)
-vars_mu <- portfolio_strategy(daily_return, intraday_refreshed)
-vars_t <- portfolio_strategy(daily_return, intraday_refreshed)
-vars_t_mu <- portfolio_strategy(daily_return, intraday_refreshed)
+weights_g_mu <- readRDS("weights_g_mu")
+weights_t <- readRDS("weights_t")
+weights_t_mu <- readRDS("weights_t_mu")
+
+png(filename = "weights_g.png", width = 1000, height = 550)
+plot_weigth_curves(weights_list = weights_g, daily_return,intraday_refreshed);dev.off()
+
+png(filename = "weights_g_mu.png", width = 1000, height = 550)
+plot_weigth_curves(weights_list = weights_g_mu, daily_return,intraday_refreshed);dev.off()
+
+png(filename = "weights_t.png", width = 1000, height = 550)
+plot_weigth_curves(weights_list = weights_t, daily_return,intraday_refreshed);dev.off()
+
+png(filename = "weights_t_mu.png", width = 1000, height = 550)
+plot_weigth_curves(weights_list = weights_t_mu, daily_return,intraday_refreshed);dev.off()
+
+
+
+
+
+
+vars <- portfolio_strategy(daily_return, intraday_refreshed, t = F, mu = 0)
+vars_mu <- portfolio_strategy(daily_return, intraday_refreshed, t = F, mu = 0.08/250)
+vars_t <- portfolio_strategy(daily_return, intraday_refreshed, t = T, mu = 0)
+vars_t_mu <- portfolio_strategy(daily_return, intraday_refreshed, t = T, mu = 0.08/250)
 
 vars_df <- data.frame(
   Vars = c(
@@ -326,18 +362,18 @@ p1 <- ggplot2::ggplot(
   data = vars_df %>% 
     dplyr::filter(Mu == "Yes"), 
   aes(x = Distribution, y = Vars, fill = Distribution)
-) + ggplot2::geom_boxplot(alpha = 0.6) + 
+) + ggplot2::geom_boxplot(alpha = 0.4) + 
   labs(x = expression(paste(mu,' = 0.0003')), y = "VaR", title = " Distribution of Forecasted VaR") +
-  scale_fill_manual(values = c("#31688e","#5dc863")) +
+  scale_fill_manual(values = c("#443a83", "#20a486")) +
   theme_minimal() +
   theme(legend.position = "none")
 p2 <- ggplot2::ggplot(
   data = vars_df %>% 
     dplyr::filter(Mu == "No"), 
   aes(x = Distribution, y = Vars, fill = Distribution)
-) + ggplot2::geom_boxplot(alpha = 0.6) +
+) + ggplot2::geom_boxplot(alpha = 0.4) +
   labs(x = expression(paste(mu,' = 0')), y = "VaR", title = "") +
-  scale_fill_manual(values = c("#31688e","#5dc863")) +
+  scale_fill_manual(values = c("#443a83", "#20a486")) +
   theme_minimal() +
   theme(legend.position = "none")
 

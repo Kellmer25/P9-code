@@ -421,7 +421,7 @@ get_refresh_avg_time = function(stock_df, return_matrix=TRUE) {
 ### Simulation Study -----------------------------------------------------------
 transform_results <- function(lambda_level, simulation_result) {
   
-  res <- matrix(rep(0,5*6),nrow = 5, ncol = 6)
+  res <- matrix(rep(0,6*6),nrow = 6, ncol = 6)
   for (i in 1:1000) {
     res <- res + simulation_result[[lambda_level]][[i]][[1]]
   }
@@ -466,7 +466,7 @@ results_to_table <- function(simulation_result){
       mbias = 0,
       mrmse = 0,
       mmae = 0, 
-      .before = 7
+      .before = 8
     ) %>% 
     dplyr::add_row(
       Noise = "0",
@@ -476,7 +476,7 @@ results_to_table <- function(simulation_result){
       mbias = 0,
       mrmse = 0,
       mmae = 0, 
-      .before = 13
+      .before = 15
     ) %>% 
     dplyr::add_row(
       Noise = "0",
@@ -486,7 +486,7 @@ results_to_table <- function(simulation_result){
       mbias = 0,
       mrmse = 0,
       mmae = 0, 
-      .before = 19
+      .before = 22
     ) %>% 
     dplyr::add_row(
       Noise = "0",
@@ -496,7 +496,17 @@ results_to_table <- function(simulation_result){
       mbias = 0,
       mrmse = 0,
       mmae = 0, 
-      .before = 25
+      .before = 29
+    ) %>% 
+    dplyr::add_row(
+      Noise = "0",
+      bias = 0,
+      rmse = 0,
+      mae = 0,
+      mbias = 0,
+      mrmse = 0,
+      mmae = 0, 
+      .before = 36
     )
   
   latex_table <- kableExtra::kbl(
@@ -504,7 +514,7 @@ results_to_table <- function(simulation_result){
     longtable = T, 
     booktabs = T,
     format = "latex",
-    linesep = c("", "", "", "", "", paste0("\\addlinespace")),
+    linesep = c("", "", "", "", "", "", paste0("\\addlinespace")),
     caption = "Longtable"
   ) %>%
     kableExtra::add_header_above(c(" ", "RC" = 3, "MRC" = 3)) %>%
@@ -512,7 +522,7 @@ results_to_table <- function(simulation_result){
       latex_options = c(
         "repeat_header", 
         "striped"),
-      stripe_index = c(1:6, 13:18, 25:30),
+      stripe_index = c(1:7, 15:21, 29:35),
       position = "center"
     ) %>%
     kableExtra::column_spec(2:7, width = "2cm")
@@ -567,8 +577,8 @@ twobytwo <- function(lambda_level, simulation_result) {
     # }
     entry <- switch(number, 11, 12, 21, 22)
     
-    color1 <- "#31688e"
-    color2 <- "#5dc863"
+    color1 <- "#443a83"
+    color2 <- "#20a486"
     
     df <- data.frame(
       "MRC" = mrc_res[[number]],
@@ -610,14 +620,13 @@ twobytwo <- function(lambda_level, simulation_result) {
     figs[[1]],figs[[2]],figs[[3]],figs[[4]], 
     ncol=2, nrow=2, common.legend = TRUE, legend="bottom"
   )
-  browser()
+  # browser()
   png(
     filename = paste0("bias_plot_l", lambda_level, ".png"),
     width = 1000,
     height = 550
   )
   final_plot
-  dev.off()
 }
 
 get_obs_number <- function(simulation_result, lambda_level) {
@@ -627,13 +636,13 @@ get_obs_number <- function(simulation_result, lambda_level) {
   }
   return(obs_n/1000)
 }
-
-twobytwo(lambda_level = 1, simulation_result = simulation_result)
-twobytwo(lambda_level = 2, simulation_result = simulation_result)
-twobytwo(lambda_level = 3, simulation_result = simulation_result)
-twobytwo(lambda_level = 4, simulation_result = simulation_result)
-twobytwo(lambda_level = 5, simulation_result = simulation_result)
 # 
+# twobytwo(lambda_level = 1, simulation_result = simulation_result);dev.off()
+# twobytwo(lambda_level = 2, simulation_result = simulation_result);dev.off()
+# twobytwo(lambda_level = 3, simulation_result = simulation_result);dev.off()
+# twobytwo(lambda_level = 4, simulation_result = simulation_result);dev.off()
+# twobytwo(lambda_level = 5, simulation_result = simulation_result);dev.off()
+ 
 # stock_df = get_polygon_df(tickers)
 # times = get_stock_avg_time(stock_df)
 # 
