@@ -11,26 +11,46 @@ suppressMessages({
   library(xts)
   library(stringi)
   library(Rsolnp)
+  library(viridis)
+  library(RColorBrewer)
+  library(gridExtra)
 })
 
 source("helpfuns.R")
 source("get_RC.R")
+source("avar.R")
+source("DCC-HEAVY_forecasting.R")
 ### Functions -----------------------------------------------------------------
 portfolio_strategy <- function(
     daily_return,
-    refresh_data, 
-    start_date = "2023-10-02"
+    intraday_refreshed, 
+    start_date = "2023-10-02",
+    return_H = F,
+    t = F,
+    mu = 0
 ) {
-  browser()
-  RC_list <- get_daily_RC(refresh_data)
-  get_weights <- function(Date, daily_return, refresh_data, RC_list) {
-    VaR <- function(omega, sigma, alpha) {
-      res <- sqrt(t(omega)%*%sigma%*%omega)*qnorm(alpha)
+  
+  mu_t <- daily_return %>% 
+    dplyr::filter(date < lubridate::as_date("2023-10-02")) %>% 
+    dplyr::select(-date) %>% 
+    as.matrix() %>% 
+    colMeans()
+  
+  RC_list <- get_daily_RC(intraday_refreshed)
+  
+  get_weights <- function(Date, daily_return, intraday_refreshed, RC_list, mu_t, return_H = return_H, t = t, mu = mu) {
+    VaR <- function(omega, sigma, alpha, mu_t, t = t) {
+      if (t) {
+        quantile <- qt(p = alpha, df=10)
+      } else {
+        quantile <- qnorm(p = alpha)
+      }
+      res <- -t(omega)%*%mu_t + sqrt(t(omega)%*%sigma%*%omega)*quantile
       return(res)
     }
     
-    eqn <- function(omega, sigma, alpha) {
-      return(sum(omega))
+    eqn <- function(omega, sigma, alpha, mu_t, t) {
+      return(c(sum(omega),t(omega)%*%mu_t))
     }
     
     #forecast H_t | t-1
@@ -41,7 +61,7 @@ portfolio_strategy <- function(
     returns_mat <- returns %>% 
       dplyr::select(-date) %>% 
       as.matrix()
-    intraday <- refresh_data %>% 
+    intraday <- intraday_refreshed %>% 
       dplyr::mutate(
         Start = rownames(.),
         date = lubridate::as_date(Start)
@@ -49,10 +69,27 @@ portfolio_strategy <- function(
       dplyr::filter(
         date < Date
       )
-    
     RC_list_filt <- RC_list[1:(which(names(RC_list) == as.character(Date))-1)]
     
     H_end <- get_H_t_all(RC_list = RC_list_filt, return_mat = returns_mat)$H_end
+    if (return_H) {
+      return(H_end)
+    }
+    # res <- solnp(
+    #   pars = as.matrix(
+    #     rep(1/(ncol(daily_return)-1), ncol(daily_return)-1),
+    #     ncol = 1
+    #   ), 
+    #   fun = VaR,
+    #   sigma = H_end,
+    #   alpha = 0.95,
+    #   mu_t = mu_t,
+    #   LB = rep(-2, ncol(intraday_refreshed)),#all unknowns are restricted to be positiv
+    #   UB = rep(2, ncol(intraday_refreshed)),
+    #   eqfun = eqn,
+    #   eqB = c(1,0) #0.08/250
+    # )$pars
+    
     res <- solnp(
       pars = as.matrix(
         rep(1/(ncol(daily_return)-1), ncol(daily_return)-1),
@@ -61,19 +98,43 @@ portfolio_strategy <- function(
       fun = VaR,
       sigma = H_end,
       alpha = 0.95,
-      LB = rep(-100, 13),#all unknowns are restricted to be positiv
-      UB = rep(100, 13),
+      mu_t = mu_t,
+      t = t,
+      LB = rep(-2, ncol(intraday_refreshed)),#all unknowns are restricted to be positiv
+      UB = rep(2, ncol(intraday_refreshed)),
       eqfun = eqn,
-      eqB = 1
-    )$pars
+      eqB = c(1,mu) #0.08/250
+    )$values %>% tail(1)
     
     return(res)
   }
+  dates <- daily_return %>% 
+    dplyr::filter(date >= start_date) %>% 
+    .[["date"]]
   
-  get_PnL <- function(weights_list, dates, daily_return, refresh_data) {
+  weights_list <- lapply(
+    X = dates,
+    FUN = get_weights,
+    daily_return = daily_return,
+    intraday_refreshed = intraday_refreshed,
+    RC_list = RC_list,
+    mu_t = mu_t,
+    return_H = return_H,
+    t = t,
+    mu = mu
+  )
+  
+  return(weights_list)
+}
+
+pnl_curves <- function(weights_list, daily_return, intraday_refreshed, start_date = "2023-10-02") {
+  dates <- daily_return %>% 
+    dplyr::filter(date >= start_date) %>% 
+    .[["date"]]
+  
+  get_PnL <- function(weights_list, dates, daily_return, intraday_refreshed) {
     daily_pnl <- rep(0,length(dates))
-    
-    prices <- refresh_data %>% 
+    prices <- intraday_refreshed %>% 
       dplyr::mutate_if(is.numeric, exp)
     
     for (i in 1:length(dates)) {
@@ -106,62 +167,214 @@ portfolio_strategy <- function(
       row.names(pricesA) <- NULL
       
       price_diff <- pricesB - pricesA
-        
+      
       daily_pnl[i] <- returns %*% weights
     }
-    return(sum(daily_pnl))
+    return(cumsum(daily_pnl))
   }
   
+  buynhold <- function(dates, d = ncol(intraday_refreshed)) {
+    all_weights <- lapply(
+      X = 1:d,
+      FUN = function(asset, dates, d) {
+        lapply(
+          X = dates,
+          FUN = function(dates, asset, d) {
+            a<- rep(0,d)
+            a[asset] <- 1
+            return(a)
+          },
+          asset = asset,
+          d = d
+        )
+      },
+      dates = dates,
+      d = d
+    )
+  }
+  all_weights <- buynhold(dates) 
+  all_weights[[ncol(intraday_refreshed)+1]] <- weights_list
+  all_weights <- all_weights %>% 
+    magrittr::set_names(c(colnames(intraday_refreshed),"VaR"))
+  
+  pnl_curves <- lapply(
+    all_weights,
+    FUN = get_PnL,
+    dates = dates, 
+    daily_return = daily_return, 
+    intraday_refreshed = intraday_refreshed
+  )
+  plot_list_of_curves_ggplot <- function(data_list) {
+    # Combine the list of vectors into a data frame
+    data_df <- data.frame(
+      Index = rep(dates, length(data_list)),
+      EUR = unlist(data_list)*100,
+      Portfolio = rep(names(data_list), each = length(data_list[[1]]))
+    )
+      # dplyr::mutate(Portfolio = dplyr::if_else(Portfolio == "VaR", "aVaR", Portfolio))
+    
+    bar_df <- data_df %>% 
+      dplyr::group_by(Portfolio) %>% 
+      dplyr::summarise(EUR = tail(EUR,1))
+    # Create the ggplot
+    p1 <- ggplot(data_df, aes(x = Index, y = EUR, color = Portfolio, alpha = Portfolio)) +
+      geom_line(data = data_df, size = 1) +
+      labs(x = "Date", y = "Return (%)", title = "Cumulative PnL") +
+      scale_color_manual(values = c(rev(viridis(13)))) +
+      scale_alpha_manual(values = c(rep(0.4,12),1), guide = guide_legend(title = "Portfolio")) +
+      # scale_color_viridis(discrete = TRUE, option = "D") +
+      theme_minimal() + 
+      theme(legend.position="none")
+    
+    p2 <- ggplot(bar_df, aes(x = Portfolio, y = EUR, fill = Portfolio, alpha = Portfolio)) + 
+      geom_bar(stat="identity") +
+      labs(x = "", y = "", title = "Final PnL") +
+      scale_fill_manual(values = c(rev(viridis(13)))) +
+      scale_alpha_manual(values = c(rep(0.5,12),1), guide = guide_legend(title = "Portfolio")) +
+      # scale_fill_viridis(discrete = TRUE, option = "D") +
+      theme_minimal() +
+      theme(axis.text.x=element_text(colour="white")) 
+      # scale_fill_discrete(labels=c('VaR', rep("test", 12)))
+    # theme(axis.text.x=element_blank())
+    
+    gridExtra::grid.arrange(p1,p2,ncol=2)
+    # cowplot::plot_grid()
+  }
+  
+  plot_list_of_curves_ggplot(pnl_curves)
+  
+  return(pnl_curves)
+}
+
+plot_weigth_curves <- function(weights_list, daily_return, intraday_refreshed, start_date = "2023-10-02") {
   dates <- daily_return %>% 
     dplyr::filter(date >= start_date) %>% 
     .[["date"]]
   
-  weights_list <- lapply(
-    X = dates,
-    FUN = get_weights,
-    daily_return = daily_return,
-    refresh_data = refresh_data,
-    RC_list = RC_list
-  )
+  weights_list <- weights_list %>% 
+    unname()
+  df <- data.frame(matrix(NA, nrow = length(dates), ncol = ncol(intraday_refreshed))) %>% 
+    magrittr::set_colnames(c(colnames(intraday_refreshed)))
   
-  buynhold_weights <- lapply(
-    X = dates,
-    FUN = function(dates) {
-      c(1,rep(0,12))
-    }
-  )
+  for (i in 1:length(dates)) {
+    df[i,] <- weights_list[[i]]*100
+  }
+  weights_df <- df %>% 
+    dplyr::mutate(Date = dates) %>% 
+    tidyr::gather("Asset", "Weight", -Date)
   
-  get_PnL(weights_list = buynhold_weights, dates = dates, daily_return, refresh_data)
+  box_weights_df <- weights_df %>% 
+    dplyr::select(-Date)
   
-  browser()
-  daily_return
+  p1 <- ggplot(weights_df, aes(x = Date, y = Weight, color = Asset)) +
+    geom_line(size = 1) +
+    labs(x = "Date", y = "Weight (%)", title = "VaR Portfolio Weights") +
+    scale_color_viridis(discrete = TRUE, option = "D") +
+    theme_minimal() + 
+    theme(legend.position="none")
   
+  p2 <- ggplot(box_weights_df, aes(x=Asset, y=Weight, fill=Asset)) +
+    geom_boxplot(alpha = 0.6) +
+    labs(x = "", y = "Weight (%)", title = "VaR Portfolio Weights") +
+    theme_minimal() +
+    theme(axis.text.x=element_text(colour="white")) +
+    scale_fill_viridis(discrete = TRUE, option = "D") +
+    geom_hline(yintercept=0, linetype='dashed', col = 'black') +
+    coord_cartesian(ylim = c(-30, 65))
+  
+  gridExtra::grid.arrange(p2,ncol=1)
 }
 
-
-
 ### Data ----------------------------------------------------------------------
-load("daily_return_13.RData")
+# load("daily_return_13.RData")
 load("refresh_last.RData")
 
-daily_return <- tester
+# daily_return <- tester
 
-intraday_refreshed <- refresh_data
+intraday_refreshed <- refresh_data %>% 
+  dplyr::mutate_if(is.numeric, function(x){-x}) %>% 
+  dplyr::select(-EURTRY)
 
-train_daily_return <- daily_return %>% 
-  dplyr::filter(date < lubridate::as_date("2023-10-01"))
+daily_return <- data.frame(diff(as.matrix(intraday_refreshed))) %>% 
+  dplyr::mutate(date = lubridate::date(rownames(.)), .before=1) %>% 
+  dplyr::group_by(date) %>% 
+  dplyr::summarise_all(sum)
 
-test_daily_return <- daily_return %>% 
-  dplyr::filter(date >= lubridate::as_date("2023-10-01"))
+# return_mat <- daily_return %>% 
+#   dplyr::select(-date) %>% 
+#   as.matrix()
+# 
+# 
+# H_end <- get_H_t_all(RC_list, return_mat)
 
-train_intraday <- daily_return %>% 
-  dplyr::filter(date < lubridate::as_date("2023-10-01"))
+png("weights_t_mu.png", height = 550, width = 1000)
+plot_weigth_curves(weights_list = weights_t_mu, daily_return,intraday_refreshed)
+dev.off()
 
-test_intraday <- daily_return %>% 
-  dplyr::filter(date >= lubridate::as_date("2023-10-01"))
+weights_g_mu <- readRDS("weights_g_mu")
+weights_t <- readRDS("weights_t")
+weights_t_mu <- readRDS("weights_t_mu")
 
-return_mat <- daily_return %>% 
-  dplyr::select(-date) %>% 
-  as.matrix()
-H_end <- get_H_t_all(RC_list, return_mat)
+png(filename = "weights_g.png", width = 1000, height = 550)
+plot_weigth_curves(weights_list = weights_g, daily_return,intraday_refreshed);dev.off()
 
+png(filename = "weights_g_mu.png", width = 1000, height = 550)
+plot_weigth_curves(weights_list = weights_g_mu, daily_return,intraday_refreshed);dev.off()
+
+png(filename = "weights_t.png", width = 1000, height = 550)
+plot_weigth_curves(weights_list = weights_t, daily_return,intraday_refreshed);dev.off()
+
+png(filename = "weights_t_mu.png", width = 1000, height = 550)
+plot_weigth_curves(weights_list = weights_t_mu, daily_return,intraday_refreshed);dev.off()
+
+
+
+
+
+
+vars <- portfolio_strategy(daily_return, intraday_refreshed, t = F, mu = 0)
+vars_mu <- portfolio_strategy(daily_return, intraday_refreshed, t = F, mu = 0.08/250)
+vars_t <- portfolio_strategy(daily_return, intraday_refreshed, t = T, mu = 0)
+vars_t_mu <- portfolio_strategy(daily_return, intraday_refreshed, t = T, mu = 0.08/250)
+
+vars_df <- data.frame(
+  Vars = c(
+    unlist(vars),
+    unlist(vars_mu),
+    unlist(vars_t),
+    unlist(vars_t_mu)
+  ),
+  Mu = c(
+    rep("No",length(vars)),
+    rep("Yes",length(vars)),
+    rep("No",length(vars)),
+    rep("Yes",length(vars))
+  ),
+  Distribution = c(
+    rep("Gaussian",length(vars)),
+    rep("Gaussian",length(vars)),
+    rep("Student's t",length(vars)),
+    rep("Student's t",length(vars))
+  )
+)
+
+p1 <- ggplot2::ggplot(
+  data = vars_df %>% 
+    dplyr::filter(Mu == "Yes"), 
+  aes(x = Distribution, y = Vars, fill = Distribution)
+) + ggplot2::geom_boxplot(alpha = 0.4) + 
+  labs(x = expression(paste(mu,' = 0.0003')), y = "VaR", title = " Distribution of Forecasted VaR") +
+  scale_fill_manual(values = c("#443a83", "#20a486")) +
+  theme_minimal() +
+  theme(legend.position = "none")
+p2 <- ggplot2::ggplot(
+  data = vars_df %>% 
+    dplyr::filter(Mu == "No"), 
+  aes(x = Distribution, y = Vars, fill = Distribution)
+) + ggplot2::geom_boxplot(alpha = 0.4) +
+  labs(x = expression(paste(mu,' = 0')), y = "VaR", title = "") +
+  scale_fill_manual(values = c("#443a83", "#20a486")) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+cowplot::plot_grid(p1, p2, ncol = 2)

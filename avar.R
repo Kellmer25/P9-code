@@ -607,85 +607,85 @@ get_forex_plots <- function(forex_list) {
 }
 
 ### Testing -------------------------------------------------------------------
-sim <- simulate_prices(n_prices = 2, Tend = 1, N = 86400, gamma2 = 0.001)
-sim$cov #Analytical cov
-Y <- sim$XwN
-mrc <- MRC_est(Y);mrc
-rc <- RC_est(Y);rc
-avar <- avar_est(Y);avar
-conf_int <- confidence_intervals(Y, mrc, avar);conf_int
-#MRC
-MAE(sim$cov, mrc);RMSE(sim$cov, mrc)
-#RC
-MAE(sim$cov, rc);RMSE(sim$cov, rc)
-
-pdata <- matrix_to_dt(exp(Y), return_list = T)
-hf_mrc <- highfrequency::rMRCov(
-  pdata,crossAssetNoiseCorrection = T, makePsd = F, theta = 0.8);hf_mrc
-hf_mrc - mrc
-
-updated_Y <- update_sampling_freq(
-  Y, 
-  lambdas = list("lambda1" = 1, "lambda2" = 1)
-)
-
-set.seed(123)
-rwest_result <- rolling_window_estimation(30, 10000, 2, 0.001)
-saveRDS(rwest_result, "rwest_result")
-
-test <- matrix(c(1:3,1:3), ncol = 2)
-
-RC_bias <- rep(0,1000)
-for (i in 1:1000) {
-  RC_bias[i] <- simulation_result[[1]][[i]][[1]][5,3]
-}
-
-tic()
-TEST <- simulation(lambda1 = 30, lambda2 = 60)
-toc()
-
-res <- rep(0,1000)
-for (i in 1:1000) {
-  res[i] <- simulation_result[[5]][[i]] %>% .$n
-}
-n_list <- append(n_list,list(mean(res)))
-
-### Simulation ----------------------------------------------------------------
-set.seed(123)
-lambdas <- list(c(rep(10,9),20))
-EffPrice <- lapply(
-  1:10, 
-  simulate_prices,
-  n_prices = 2, Tend = 1, N = 86400, gamma2 = 0
-)
-tic()
-simulation_result <- lapply(
-  X = lambdas,
-  FUN = function(lambdas, EfficientPrice) {
-    res <- lapply(
-      X = EfficientPrice, 
-      FUN = simulation,
-      lambdas = lambdas
-    )
-    return(res)
-  },
-  EfficientPrice = EffPrice
-)
-# saveRDS(simulation_result, "simulation_result")
-toc()
-
-indexes_to_keep
-test <- data.frame("indexes_to_keep" = indexes_to_keep) 
-
-
-numbers <- which(indexes_to_keep == T)
-
-res <- rep(0,length(numbers)-1)
-for (i in 1:(length(numbers)-1)){
-  res[i] <- sum(indexes_to_keep[numbers[i]:(numbers[i+1]-1)]==0)
-}
-indexes_to_keep[numbers[i]:numbers[i+1]]
-
+# sim <- simulate_prices(n_prices = 2, Tend = 1, N = 86400, gamma2 = 0.001)
+# sim$cov #Analytical cov
+# Y <- sim$XwN
+# mrc <- MRC_est(Y);mrc
+# rc <- RC_est(Y);rc
+# avar <- avar_est(Y);avar
+# conf_int <- confidence_intervals(Y, mrc, avar);conf_int
+# #MRC
+# MAE(sim$cov, mrc);RMSE(sim$cov, mrc)
+# #RC
+# MAE(sim$cov, rc);RMSE(sim$cov, rc)
+# 
+# pdata <- matrix_to_dt(exp(Y), return_list = T)
+# hf_mrc <- highfrequency::rMRCov(
+#   pdata,crossAssetNoiseCorrection = T, makePsd = F, theta = 0.8);hf_mrc
+# hf_mrc - mrc
+# 
+# updated_Y <- update_sampling_freq(
+#   Y, 
+#   lambdas = list("lambda1" = 1, "lambda2" = 1)
+# )
+# 
+# set.seed(123)
+# rwest_result <- rolling_window_estimation(30, 10000, 2, 0.001)
+# saveRDS(rwest_result, "rwest_result")
+# 
+# test <- matrix(c(1:3,1:3), ncol = 2)
+# 
+# RC_bias <- rep(0,1000)
+# for (i in 1:1000) {
+#   RC_bias[i] <- simulation_result[[1]][[i]][[1]][5,3]
+# }
+# 
+# tic()
+# TEST <- simulation(lambda1 = 30, lambda2 = 60)
+# toc()
+# 
+# res <- rep(0,1000)
+# for (i in 1:1000) {
+#   res[i] <- simulation_result[[5]][[i]] %>% .$n
+# }
+# n_list <- append(n_list,list(mean(res)))
+# 
+# ### Simulation ----------------------------------------------------------------
+# set.seed(123)
+# lambdas <- list(c(rep(10,9),20))
+# EffPrice <- lapply(
+#   1:10, 
+#   simulate_prices,
+#   n_prices = 2, Tend = 1, N = 86400, gamma2 = 0
+# )
+# tic()
+# simulation_result <- lapply(
+#   X = lambdas,
+#   FUN = function(lambdas, EfficientPrice) {
+#     res <- lapply(
+#       X = EfficientPrice, 
+#       FUN = simulation,
+#       lambdas = lambdas
+#     )
+#     return(res)
+#   },
+#   EfficientPrice = EffPrice
+# )
+# # saveRDS(simulation_result, "simulation_result")
+# toc()
+# 
+# indexes_to_keep
+# test <- data.frame("indexes_to_keep" = indexes_to_keep) 
+# 
+# 
+# numbers <- which(indexes_to_keep == T)
+# 
+# res <- rep(0,length(numbers)-1)
+# for (i in 1:(length(numbers)-1)){
+#   res[i] <- sum(indexes_to_keep[numbers[i]:(numbers[i+1]-1)]==0)
+# }
+# indexes_to_keep[numbers[i]:numbers[i+1]]
+# 
 
 
 
