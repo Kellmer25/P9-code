@@ -1,9 +1,9 @@
 library(ggplot2)
 library(dplyr)
-library(highfrequency)
 library(data.table)
 library(glue)
 library(xts)
+library(viridis)
 
 obs_times = function(N=23400, lambdas=c(3,6), df=FALSE) {
   len = length(lambdas)
@@ -60,15 +60,17 @@ refresh_times = function(df) {
 
 set.seed(12311)
 df = obs_times(N=10, lambdas=c(1,2,3), df=TRUE)
+times = refresh_times(df)
 
 ggplot(df) + 
-  geom_point(aes(x=lambda1, y=1), col="blue", size=3) + 
-  geom_point(aes(x=lambda2, y=2), col="red", size=3) + 
-  geom_point(aes(x=lambda3, y=3), col="green", size=3) +
+  geom_point(aes(x=lambda1, y=1), color="#b5de2c", size=3) + 
+  geom_point(aes(x=lambda2, y=2), color="#1fa187", size=3) + 
+  geom_point(aes(x=lambda3, y=3), color="#472f7d", size=3) +
   geom_vline(xintercept=times, linetype="dashed", linewidth=0.8) + 
   scale_x_continuous(breaks=seq(1, 20, 1)) + 
   scale_y_continuous(breaks=c(1,2,3), limits=c(0.5,3.5)) +
   theme(panel.border = element_blank()) + 
   labs(x="Time", y = "Lambda") + 
-  theme_bw()
+  scale_fill_viridis() +
+  theme_minimal()
 

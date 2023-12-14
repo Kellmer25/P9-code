@@ -7,42 +7,17 @@ data = get_forex_data()
 data = get_forex_data_dfs()
 info = get_empirical_data(data)
 
-diff_data = info[["diff"]]
-acf_data = info[["acf"]]
 
-jpy_data = info[["diff"]][["EURJPY"]]
+# Plots
+asset = names(forex_dfs)[1]
 
-jpy_data %>% filter(diffs > 60) %>% View()
-View(jpy_data[7180572:(7180572+2000), ])
-
-ggplot(jpy_data[1:8000, ], aes(x=times, y=diffs)) + 
-  geom_line()
-
-# Get data and times
-data = get_forex_data()
-times = get_avg_time(data) %>% arrange(avg)
-
-refresh_data = refresh_list(data)
-info = get_comp_df(data)
-
-test = get_comp_df(data)
-matrices = test[["matrices"]]
-
-for (matrix in matrices) {
-  matrix %>% diag() %>% norm(type="2") %>% print()
-}
-
-# MS EURJPY
-tester = matrix(ncol=2) %>% as.data.frame()
-for (item in data$EURJPY) {
-  item = item %>% 
-    as.data.frame() %>% 
-    magrittr::set_colnames(c("V2")) %>% 
-    mutate(V1 = as.POSIXct(index(item), origin="1970-01-01", tz="utc"), .before=1)
-  tester = rbind(tester, item)
-}
-tester = tester %>% na.omit()
-get_ms_noise(tester$V2)
+forex_dfs[[asset]] %>% 
+  ggplot(., aes(x=time)) +
+  geom_line(aes_string(y=asset)) + 
+  geom_vline(xintercept="2023-09-01 00:00:00") + 
+  labs(y="Log-Price", 
+       title=asset) + 
+  theme_minimal()
 
 # SPX
 spx = df = read.csv2(file="SPX/DAT_NT_SPXUSD_T_LAST_202309.csv", header=FALSE) %>%
@@ -86,15 +61,3 @@ log_stock_df = stock_df
 log_stock_df[2:ncol(log_stock_df)] = log(stock_df[2:ncol(stock_df)])
 
 info = get_refresh_avg_time(log_stock_df)
-
-# Save and load for lists
-save(data, file="Ignore/log_forex_list.Rdata")
-save(refresh_data, file="Ignore/log_forex_refresh.RData")
-save(test, file="matrices.RData")
-
-load(file="Ignore/log_forex_refresh.RData")
-load(file="Ignore/log_forex_list.RData")
-
-# Save and load for dfs
-save(data, file="forex_df.Rdata")
-save(refresh_data, file="forex_refresh_df.RData")
