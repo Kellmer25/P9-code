@@ -6,18 +6,55 @@ data = get_forex_data()
 # Initial data analysis
 data = get_forex_data_dfs()
 info = get_empirical_data(data)
+forex_dfs <- data
 
+forex_df_filt <- forex_dfs[[asset]][indicies,]
 
 # Plots
-asset = names(forex_dfs)[1]
-
-forex_dfs[[asset]] %>% 
+Sys.setlocale("LC_ALL", "English")
+i <- 13
+asset <- names(data)[i]
+indicies <- seq(from = 1, to = nrow(data[[asset]]), by = 10)
+forex_df_filt <- data[[asset]][indicies,]
+plot_min <- min(forex_df_filt[[asset]])
+p <- forex_df_filt %>% 
   ggplot(., aes(x=time)) +
   geom_line(aes_string(y=asset)) + 
-  geom_vline(xintercept="2023-09-01 00:00:00") + 
-  labs(y="Log-Price", 
-       title=asset) + 
-  theme_minimal()
+  geom_vline(
+    xintercept=as.POSIXct("2023-09-01T00:00:00", format = "%FT%T"),
+    linetype = 2
+  ) + 
+  labs(
+    y="Log-Price",
+    x="Time", 
+    title=paste0("Log-Price Movement of ", asset)
+  ) +
+  theme_minimal() +
+  annotate("text", x=as.POSIXct("2023-05-01T00:00:00", format = "%FT%T"), y=plot_min, label= "Train") + 
+  annotate("text", x=as.POSIXct("2023-10-27T00:00:00", format = "%FT%T"), y=plot_min, label= "Test")
+
+png(filename = paste0(asset, "_logprice.png"), width = 500, height = 300)
+p
+dev.off()
+
+
+asset = names(forex_dfs)[1]
+
+forex_df_filt %>% 
+  ggplot(., aes(x=time)) +
+  geom_line(aes_string(y=asset)) + 
+  geom_vline(
+    xintercept=as.POSIXct("2023-09-01T00:00:00", format = "%FT%T"),
+    linetype = 2
+  ) + 
+  labs(
+    y="Log-Price",
+    x="Time", 
+    title="Log-Price Movement of EURAUD"
+  ) +
+  theme_minimal() +
+  annotate("text", x=as.POSIXct("2023-05-01T00:00:00", format = "%FT%T"), y=0.42, label= "Train") + 
+  annotate("text", x=as.POSIXct("2023-10-27T00:00:00", format = "%FT%T"), y=0.42, label= "Test") 
 
 # SPX
 spx = df = read.csv2(file="SPX/DAT_NT_SPXUSD_T_LAST_202309.csv", header=FALSE) %>%
