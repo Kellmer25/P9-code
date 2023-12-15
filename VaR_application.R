@@ -14,6 +14,7 @@ suppressMessages({
   library(viridis)
   library(RColorBrewer)
   library(gridExtra)
+  library(purrr)
 })
 
 source("helpfuns.R")
@@ -61,14 +62,14 @@ portfolio_strategy <- function(
     returns_mat <- returns %>% 
       dplyr::select(-date) %>% 
       as.matrix()
-    intraday <- intraday_refreshed %>% 
-      dplyr::mutate(
-        Start = rownames(.),
-        date = lubridate::as_date(Start)
-      ) %>% 
-      dplyr::filter(
-        date < Date
-      )
+    # intraday <- intraday_refreshed %>% 
+    #   dplyr::mutate(
+    #     Start = rownames(.),
+    #     date = lubridate::as_date(Start)
+    #   ) %>% 
+    #   dplyr::filter(
+    #     date < Date
+    #   )
     RC_list_filt <- RC_list[1:(which(names(RC_list) == as.character(Date))-1)]
     
     H_end <- get_H_t_all(RC_list = RC_list_filt, return_mat = returns_mat)$H_end
@@ -124,7 +125,7 @@ portfolio_strategy <- function(
     mu = mu
   )
   
-  return(weights_list)
+  return(list(RC_list, weights_list))
 }
 
 pnl_curves <- function(weights_list, daily_return, intraday_refreshed, start_date = "2023-10-02") {
@@ -211,7 +212,7 @@ pnl_curves <- function(weights_list, daily_return, intraday_refreshed, start_dat
       EUR = unlist(data_list)*100,
       Portfolio = rep(names(data_list), each = length(data_list[[1]]))
     )
-      # dplyr::mutate(Portfolio = dplyr::if_else(Portfolio == "VaR", "aVaR", Portfolio))
+    # dplyr::mutate(Portfolio = dplyr::if_else(Portfolio == "VaR", "aVaR", Portfolio))
     
     bar_df <- data_df %>% 
       dplyr::group_by(Portfolio) %>% 
@@ -234,7 +235,7 @@ pnl_curves <- function(weights_list, daily_return, intraday_refreshed, start_dat
       # scale_fill_viridis(discrete = TRUE, option = "D") +
       theme_minimal() +
       theme(axis.text.x=element_text(colour="white")) 
-      # scale_fill_discrete(labels=c('VaR', rep("test", 12)))
+    # scale_fill_discrete(labels=c('VaR', rep("test", 12)))
     # theme(axis.text.x=element_blank())
     
     gridExtra::grid.arrange(p1,p2,ncol=2)
@@ -300,6 +301,43 @@ daily_return <- data.frame(diff(as.matrix(intraday_refreshed))) %>%
   dplyr::group_by(date) %>% 
   dplyr::summarise_all(sum)
 
+RC_H_list <- portfolio_strategy(daily_return,intraday_refreshed,return_H = T)
+RC_list <- RC_H_list[[1]][(length(RC_H_list[[1]])-39):length(RC_H_list[[1]])]
+H_list <- RC_H_list[[2]]
+weights_g <- readRDS("weights_g")
+
+get_RC_prod <- function(i, RC, weights_g) {
+  return(sqrt(t(weights_g[[i]])%*%RC[[i]]%*%weights_g[[i]]))
+}
+get_H_prod <- function(i, H, weights_g) {
+  return(sqrt(t(weights_g[[i]])%*%H[[i]]%*%weights_g[[i]]))
+}
+cov_vec <- sapply(X = 1:40, FUN = get_RC_prod, RC = r_cov, weights_g = weights_g)
+H_vec <- sapply(X = 1:40, FUN = get_H_prod, H = H_list, weights_g = weights_g)
+
+daily_return_filt[i,2:13] %>% 
+  as.matrix()
+
+r_cov <- lapply(
+  X = 1:40,
+  FUN = function(i, daily_return_filt, return_means) {
+    r <- daily_return_filt[i,2:13] %>% 
+      as.matrix()
+    return(t(r - return_means)%*%(r-return_means))
+  },
+  daily_return_filt = daily_return_filt,
+  return_means = return_means
+)
+
+FC_perf <- data.frame(
+  "Date" = rep(dates,2),
+  "Variance" = c(cov_vec, H_vec),
+  "Forecast" = c(rep("N", 40),rep("Y", 40))
+)
+
+ggplot2::ggplot(data = FC_perf, aes(x = Date, y = Variance, color = Forecast)) +
+  geom_line()
+
 # return_mat <- daily_return %>% 
 #   dplyr::select(-date) %>% 
 #   as.matrix()
@@ -326,10 +364,6 @@ plot_weigth_curves(weights_list = weights_t, daily_return,intraday_refreshed);de
 
 png(filename = "weights_t_mu.png", width = 1000, height = 550)
 plot_weigth_curves(weights_list = weights_t_mu, daily_return,intraday_refreshed);dev.off()
-
-
-
-
 
 
 vars <- portfolio_strategy(daily_return, intraday_refreshed, t = F, mu = 0)

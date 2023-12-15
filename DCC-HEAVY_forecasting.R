@@ -121,7 +121,7 @@ QLH <- function(RC_list, return_mat) {
   )
   
   P_bar <- get_P_bar(RL_t)
-  
+
   # R_bar <- P_bar
   u_t <- return_mat * diag(cov(return_mat))
   R_bar <- cor(u_t)
