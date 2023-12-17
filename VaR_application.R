@@ -30,7 +30,6 @@ portfolio_strategy <- function(
     t = F,
     mu = 0
 ) {
-  
   mu_t <- daily_return %>% 
     dplyr::filter(date < lubridate::as_date("2023-10-02")) %>% 
     dplyr::select(-date) %>% 
@@ -40,6 +39,7 @@ portfolio_strategy <- function(
   RC_list <- get_daily_RC(intraday_refreshed)
   
   get_weights <- function(Date, daily_return, intraday_refreshed, RC_list, mu_t, return_H = return_H, t = t, mu = mu) {
+    print(Date)
     VaR <- function(omega, sigma, alpha, mu_t, t = t) {
       if (t) {
         quantile <- qt(p = alpha, df=10)
@@ -76,26 +76,11 @@ portfolio_strategy <- function(
     if (return_H) {
       return(H_end)
     }
-    # res <- solnp(
-    #   pars = as.matrix(
-    #     rep(1/(ncol(daily_return)-1), ncol(daily_return)-1),
-    #     ncol = 1
-    #   ), 
-    #   fun = VaR,
-    #   sigma = H_end,
-    #   alpha = 0.95,
-    #   mu_t = mu_t,
-    #   LB = rep(-2, ncol(intraday_refreshed)),#all unknowns are restricted to be positiv
-    #   UB = rep(2, ncol(intraday_refreshed)),
-    #   eqfun = eqn,
-    #   eqB = c(1,0) #0.08/250
-    # )$pars
-    
     res <- solnp(
       pars = as.matrix(
         rep(1/(ncol(daily_return)-1), ncol(daily_return)-1),
         ncol = 1
-      ), 
+      ),
       fun = VaR,
       sigma = H_end,
       alpha = 0.95,
@@ -105,9 +90,25 @@ portfolio_strategy <- function(
       UB = rep(2, ncol(intraday_refreshed)),
       eqfun = eqn,
       eqB = c(1,mu) #0.08/250
-    )$values %>% tail(1)
+    )
     
-    return(res)
+    # res <- solnp(
+    #   pars = as.matrix(
+    #     rep(1/(ncol(daily_return)-1), ncol(daily_return)-1),
+    #     ncol = 1
+    #   ),
+    #   fun = VaR,
+    #   sigma = H_end,
+    #   alpha = 0.95,
+    #   mu_t = mu_t,
+    #   t = t,
+    #   LB = rep(-2, ncol(intraday_refreshed)),#all unknowns are restricted to be positiv
+    #   UB = rep(2, ncol(intraday_refreshed)),
+    #   eqfun = eqn,
+    #   eqB = c(1,mu) #0.08/250
+    # )$values %>% tail(1)
+    
+    return(list(tail(res$values,1), res$pars))
   }
   dates <- daily_return %>% 
     dplyr::filter(date >= start_date) %>% 
@@ -124,8 +125,7 @@ portfolio_strategy <- function(
     t = t,
     mu = mu
   )
-  
-  return(list(RC_list, weights_list))
+  return(weights_list)
 }
 
 pnl_curves <- function(weights_list, daily_return, intraday_refreshed, start_date = "2023-10-02") {
@@ -290,6 +290,101 @@ plot_weigth_curves <- function(weights_list, daily_return, intraday_refreshed, s
 # load("daily_return_13.RData")
 load("refresh_last.RData")
 
+VaR_weights_g <- portfolio_strategy(daily_return,intraday_refreshed)
+saveRDS(VaR_weights_g,"VaR_weights_g")
+VaR_weights_g_mu <- portfolio_strategy(daily_return,intraday_refreshed,mu = 0.08/250)
+saveRDS(VaR_weights_g_mu,"VaR_weights_g_mu")
+VaR_weights_t <- portfolio_strategy(daily_return,intraday_refreshed, t = T)
+saveRDS(VaR_weights_t,"VaR_weights_t")
+VaR_weights_t_mu <- portfolio_strategy(daily_return,intraday_refreshed, t = T, mu = 0.08/250)
+saveRDS(VaR_weights_t_mu,"VaR_weights_t_mu")
+
+list_to_list <- function(list, index) {
+  final_list <- vector(mode = "list")
+  for (i in 1:40) {
+    final_list[i] <- list[[i]][index]
+  }
+  return(final_list)
+}
+
+weights_g <- list_to_list(VaR_weights_g, 2)
+weights_g_mu <- list_to_list(VaR_weights_g_mu, 2)
+weights_t <- list_to_list(VaR_weights_t, 2)
+weights_t_mu  <- list_to_list(VaR_weights_t_mu, 2)
+
+vars <- list_to_list(VaR_weights_g, 1)
+vars_mu <- list_to_list(VaR_weights_g_mu, 1)
+vars_t <- list_to_list(VaR_weights_t, 1)
+vars_t_mu <- list_to_list(VaR_weights_t_mu, 1)
+
+png(filename = "pnl_g.png", width = 1000, height = 450)
+pnl_curves(weights_list = weights_g, daily_return,intraday_refreshed);dev.off()
+
+png(filename = "pnl_g_mu.png", width = 1000, height = 450)
+pnl_curves(weights_list = weights_g_mu, daily_return,intraday_refreshed);dev.off()
+
+png(filename = "pnl_t.png", width = 1000, height = 450)
+pnl_curves(weights_list = weights_t, daily_return,intraday_refreshed);dev.off()
+
+png(filename = "pnl_t_mu.png", width = 1000, height = 450)
+pnl_curves(weights_list = weights_t_mu, daily_return,intraday_refreshed);dev.off()
+
+
+png(filename = "weights_g.png", width = 1000, height = 550)
+plot_weigth_curves(weights_list = weights_g, daily_return,intraday_refreshed);dev.off()
+
+png(filename = "weights_g_mu.png", width = 1000, height = 550)
+plot_weigth_curves(weights_list = weights_g_mu, daily_return,intraday_refreshed);dev.off()
+
+png(filename = "weights_t.png", width = 1000, height = 550)
+plot_weigth_curves(weights_list = weights_t, daily_return,intraday_refreshed);dev.off()
+
+png(filename = "weights_t_mu.png", width = 1000, height = 550)
+plot_weigth_curves(weights_list = weights_t_mu, daily_return,intraday_refreshed);dev.off()
+
+vars_df <- data.frame(
+  Vars = c(
+    unlist(vars),
+    unlist(vars_mu),
+    unlist(vars_t),
+    unlist(vars_t_mu)
+  ),
+  Mu = c(
+    rep("No",length(vars)),
+    rep("Yes",length(vars)),
+    rep("No",length(vars)),
+    rep("Yes",length(vars))
+  ),
+  Distribution = c(
+    rep("Gaussian",length(vars)),
+    rep("Gaussian",length(vars)),
+    rep("Student's t",length(vars)),
+    rep("Student's t",length(vars))
+  )
+)
+
+p1 <- ggplot2::ggplot(
+  data = vars_df %>% 
+    dplyr::filter(Mu == "Yes"), 
+  aes(x = Distribution, y = Vars, fill = Distribution)
+) + ggplot2::geom_boxplot(alpha = 0.4) + 
+  labs(x = expression(paste(mu,' = 0.0003')), y = "VaR") +
+  scale_fill_manual(values = c("#443a83", "#20a486")) +
+  theme_minimal() +
+  theme(legend.position = "none")
+p2 <- ggplot2::ggplot(
+  data = vars_df %>% 
+    dplyr::filter(Mu == "No"), 
+  aes(x = Distribution, y = Vars, fill = Distribution)
+) + ggplot2::geom_boxplot(alpha = 0.4) +
+  labs(x = expression(paste(mu,' = 0')), y = "VaR", title = " Distribution of Forecasted VaR") +
+  scale_fill_manual(values = c("#443a83", "#20a486")) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+cowplot::plot_grid(p2, p1, ncol = 2)
+
+
 # daily_return <- tester
 
 intraday_refreshed <- refresh_data %>% 
@@ -307,16 +402,15 @@ H_list <- RC_H_list[[2]]
 weights_g <- readRDS("weights_g")
 
 get_RC_prod <- function(i, RC, weights_g) {
-  return(sqrt(t(weights_g[[i]])%*%RC[[i]]%*%weights_g[[i]]))
+  return(t(weights_g[[i]])%*%RC[[i]]%*%weights_g[[i]])
 }
 get_H_prod <- function(i, H, weights_g) {
-  return(sqrt(t(weights_g[[i]])%*%H[[i]]%*%weights_g[[i]]))
+  return(t(weights_g[[i]])%*%H[[i]]%*%weights_g[[i]])
 }
 cov_vec <- sapply(X = 1:40, FUN = get_RC_prod, RC = r_cov, weights_g = weights_g)
 H_vec <- sapply(X = 1:40, FUN = get_H_prod, H = H_list, weights_g = weights_g)
-
-daily_return_filt[i,2:13] %>% 
-  as.matrix()
+daily_return_filt <- daily_return[(nrow(daily_return)-40):nrow(daily_return),]
+return_means <- daily_return %>% dplyr::select(-date) %>% as.matrix() %>% colMeans()
 
 r_cov <- lapply(
   X = 1:40,
@@ -332,11 +426,17 @@ r_cov <- lapply(
 FC_perf <- data.frame(
   "Date" = rep(dates,2),
   "Variance" = c(cov_vec, H_vec),
-  "Forecast" = c(rep("N", 40),rep("Y", 40))
+  "Forecast" = c(rep("Actual Variance", 40),rep("Forecasted Variance", 40))
 )
 
 ggplot2::ggplot(data = FC_perf, aes(x = Date, y = Variance, color = Forecast)) +
-  geom_line()
+  scale_color_manual(values = c("#443a83", "#20a486")) +
+  geom_point(size = 3, alpha = 0.8) +
+  geom_line(linetype = 2, size = 1, alpha = 0.8) +
+  theme_minimal() +
+  labs(title = "Actual and Forecasted Portfolio Return Variance") +
+  theme(legend.title = element_blank()) #, legend.position = c(0.85,0.80)
+  
 
 # return_mat <- daily_return %>% 
 #   dplyr::select(-date) %>% 
@@ -370,6 +470,13 @@ vars <- portfolio_strategy(daily_return, intraday_refreshed, t = F, mu = 0)
 vars_mu <- portfolio_strategy(daily_return, intraday_refreshed, t = F, mu = 0.08/250)
 vars_t <- portfolio_strategy(daily_return, intraday_refreshed, t = T, mu = 0)
 vars_t_mu <- portfolio_strategy(daily_return, intraday_refreshed, t = T, mu = 0.08/250)
+
+saveRDS(vars, "vars")
+saveRDS(vars_mu, "vars_mu")
+saveRDS(vars_t, "vars_t")
+saveRDS(vars_t_mu, "vars_t_mu")
+
+
 
 vars_df <- data.frame(
   Vars = c(
