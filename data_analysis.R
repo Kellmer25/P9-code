@@ -34,7 +34,6 @@ p <- forex_df_filt %>%
   annotate("text", x=as.POSIXct("2023-10-27T00:00:00", format = "%FT%T"), y=plot_min, label= "Test")
 
 png(filename = paste0(asset, "_logprice.png"), width = 500, height = 300)
-p
 dev.off()
 
 

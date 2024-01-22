@@ -288,7 +288,7 @@ plot_weigth_curves <- function(weights_list, daily_return, intraday_refreshed, s
 
 ### Data ----------------------------------------------------------------------
 # load("daily_return_13.RData")
-load("refresh_last.RData")
+load("refresh_last.RData")       
 
 VaR_weights_g <- portfolio_strategy(daily_return,intraday_refreshed)
 saveRDS(VaR_weights_g,"VaR_weights_g")
@@ -317,29 +317,29 @@ vars_mu <- list_to_list(VaR_weights_g_mu, 1)
 vars_t <- list_to_list(VaR_weights_t, 1)
 vars_t_mu <- list_to_list(VaR_weights_t_mu, 1)
 
-png(filename = "pnl_g.png", width = 1000, height = 450)
+png(filename = "pnl_g_noise.png", width = 1000, height = 450)
 pnl_curves(weights_list = weights_g, daily_return,intraday_refreshed);dev.off()
 
-png(filename = "pnl_g_mu.png", width = 1000, height = 450)
+png(filename = "pnl_g_mu_noise.png", width = 1000, height = 450)
 pnl_curves(weights_list = weights_g_mu, daily_return,intraday_refreshed);dev.off()
 
-png(filename = "pnl_t.png", width = 1000, height = 450)
+png(filename = "pnl_t_noise.png", width = 1000, height = 450)
 pnl_curves(weights_list = weights_t, daily_return,intraday_refreshed);dev.off()
 
-png(filename = "pnl_t_mu.png", width = 1000, height = 450)
+png(filename = "pnl_t_mu_noise.png", width = 1000, height = 450)
 pnl_curves(weights_list = weights_t_mu, daily_return,intraday_refreshed);dev.off()
 
 
-png(filename = "weights_g.png", width = 1000, height = 550)
+png(filename = "weights_g_noise.png", width = 1000, height = 550)
 plot_weigth_curves(weights_list = weights_g, daily_return,intraday_refreshed);dev.off()
 
-png(filename = "weights_g_mu.png", width = 1000, height = 550)
+png(filename = "weights_g_mu_noise.png", width = 1000, height = 550)
 plot_weigth_curves(weights_list = weights_g_mu, daily_return,intraday_refreshed);dev.off()
 
-png(filename = "weights_t.png", width = 1000, height = 550)
+png(filename = "weights_t_noise.png", width = 1000, height = 550)
 plot_weigth_curves(weights_list = weights_t, daily_return,intraday_refreshed);dev.off()
 
-png(filename = "weights_t_mu.png", width = 1000, height = 550)
+png(filename = "weights_t_mu_noise.png", width = 1000, height = 550)
 plot_weigth_curves(weights_list = weights_t_mu, daily_return,intraday_refreshed);dev.off()
 
 vars_df <- data.frame(
